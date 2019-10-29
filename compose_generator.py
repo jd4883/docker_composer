@@ -3,8 +3,6 @@ import os
 import jinja2
 import yaml
 from pathlib import Path
-# Host_IP:        ${ifconfig | grep ens192 -b1 | grep inet | awk '{print $3}'}
-# add this to the yaml later
 
 def mkdir(service_configs):
 	try:
@@ -12,7 +10,7 @@ def mkdir(service_configs):
 	except FileExistsError:
 		# directory already exists
 		pass
-with open("templates/parameters.yaml") as f:
+with open(f"{os.environ['CONFIGS']}/templates/compose_generator_parameters.yaml") as f:
 	config = yaml.load(f, Loader = yaml.FullLoader)
 globals = config['Globals']
 defaults = config['Defaults']
