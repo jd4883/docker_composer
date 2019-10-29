@@ -1,0 +1,135 @@
+version:    "3.7"
+networks:
+    backend:
+        external:     True
+    frontend:
+        external:     True
+    backend_vpn:
+        external:     True {% if stack['Volumes'] %}
+volumes: {%- for volume in stack['Volumes'] %}
+    {{ volume }}:
+          external:   True {% endfor %} {% endif %}
+configs: {%- for service in stack['Services']|sort %} {%- if 'configs' in stack['Services'][service] %}{%- for conf in stack['Services'][service]['configs']|sort %}
+    {{ conf }}:
+          file:       {{ stack['Services'][service]['configs'][conf]["Source"] }}
+{%- endfor %}{%- endif %}{%- endfor %}
+    authenticated-emails:
+          file:       ${CONFIGS}/autopirate/authenticated-emails.txt
+secrets: {%- for service in stack['Services'] %}
+    {%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service] %}
+    {{ service|lower }}_proxy_client_id:
+          file:       ${SECRETS}/{{ service|lower }}/OAUTH2_PROXY_CLIENT_ID.secret
+    {{ service|lower }}_proxy_client_secret:
+          file:       ${SECRETS}/{{ service|lower }}/OAUTH2_PROXY_CLIENT_SECRET.secret
+    {{ service|lower }}_proxy_cookie_secret:
+          file:       ${SECRETS}/{{ service|lower }}/OAUTH2_PROXY_COOKIE_SECRET.secret {% endif %}{% endfor %}
+    {%- for secret in stack['Secrets'] %}
+    {{ secret|lower }}:
+          {%- if secret == godaddy %}
+          file:       ${SECRETS}/{{ service|lower }}/{{ secret|upper }}.secret
+          {%- else %}
+          file:       ${SECRETS}/{{ secret.split('_')[0]|lower|default(service|lower) }}/{{ secret|upper }}.secret
+          {%- endif %}{%- endfor %}
+services: {%- for service in stack['Services'] %}
+    {{ service|lower }}: {%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service] or stack['Secrets'] %}
+        secrets:
+          {%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service] %}
+          - {{ service|indent }}_proxy_client_id
+          - {{ service|indent }}_proxy_client_secret
+          - {{ service|indent }}_proxy_cookie_secret    {%- endif %}{%- endif %}
+          {%- for key in stack['Services'][service]['secrets']|sort %}
+          - {{ key }}
+          {%- endfor %}
+        configs:     {%- if 'configs' in stack['Services'][service] %}
+          {%- for conf in stack['Services'][service]['configs'].items()|sort %}
+          -   source:    {{ conf[0] }}
+              target:    {{ conf[1]['Target'] }}
+              uid:       ${PUID}
+              gid:       ${PGID}
+              mode:      0{{ conf[1]['Mask'] }} {% endfor %}
+         {% elif not (stack['Services'][service]['OAUTH_PROXY'] or'proxy_secrets' in stack['Services'][service]) %}       []{% endif %}
+         {%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service]  %}
+          -   source:    authenticated-emails
+              target:    /authenticated-emails.txt
+              uid:       ${PUID}
+              gid:       ${PGID}
+              mode:      0444
+                      {%- endif %} {%- if 'tags' in stack['Services'][service]  %}
+        image:        {{ stack['Services'][service]['Image']|indent }}:{{ stack['Services'][service]['tags'] }} {% else %}
+        image:        {{ stack['Services'][service]['Image']|indent }}:latest  {% endif %}
+        hostname:     {{ service|lower|indent }}
+        env_file:
+                      - globals.env
+                      - {{ service|lower }}.env
+        volumes:      {% for volume in stack['Services'][service]['Volumes']|sort %}
+                      - {{ volume }}  {% endfor %}{% if stack['Services'][service]['ports'] %}
+        ports:          {% for port in stack['Services'][service]['ports']|sort %}
+                      - {{ port }} {% endfor %}{% endif %}
+        networks:     {% if 'vpn' in stack['Services'][service]['networks'] %}
+                      - backend_vpn         {% else %}
+                      - backend             {% endif %} {% if 'frontend' in stack['Services'][service]['networks'] and stack['Services'][service]['networks']['frontend'] and not stack['Services'][service]['OAUTH_PROXY'] %}
+                      - frontend            {% endif %}{% if stack['Services'][service]['Commands'] %}
+        command:      {% for command in stack['Services'][service]['Commands']|sort %}
+            - "{{ command }}"
+        {%- endfor%} {% endif %}
+        deploy: {% if stack['Services'][service]['mode'] != global %}
+            mode:     replicated
+            replicas: 1
+            {%- else %}
+            mode:     global
+            {%- endif %}
+            {%- if 'manager' in stack['Services'][service] %}
+            placement:
+                      constraints:    [node.role == manager]                        {% endif %}
+            labels:
+              {%- if 'OAUTH_PROXY' in stack['Services'][service] %}
+                 - "traefik.enabled=False"
+              {%- elif 'ports' in stack['Services'][service] and stack['Services'][service]['ports']  %}
+                 - "traefik.enabled=True"
+                 - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}"
+                 - "traefik.docker.network=frontend"
+                 - "traefik.port={{ stack['Services'][service]['ports'][0].split(":")[0] }}"
+              {%- else %}
+                 - "traefik.enabled=False"
+                {% endif %}
+    {%- if 'OAUTH_PROXY' in stack['Services'][service] %}
+    {{ service }}_proxy:
+        secrets:
+                      - {{ service }}_proxy_client_id
+                      - {{ service }}_proxy_client_secret
+                      - {{ service }}_proxy_cookie_secret
+        configs:
+                    - source:   authenticated-emails
+                      target:   /authenticated-emails.txt
+                      uid:      ${PUID}
+                      gid:      ${PGID}
+                      mode:     0444
+        image:        a5huynh/oauth2_proxy:latest
+        env_file:
+                      - globals.env
+                      - {{ service|lower }}.env
+        networks:                       {% if vpn %}
+                      - backend_vpn     {% else %}
+                      - backend
+                      - frontend        {% endif %}
+        deploy:
+          mode:       replicated
+          replicas:   1
+          labels:
+                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}"
+                      - "traefik.docker.network=frontend"
+                      - "traefik.port={{ stack['Services'][service]['ports'][0].split(':')[0] }}"
+                      - "traefik.enabled=True"
+        command:    |
+                      -cookie-secure=false
+                      {%- if service|lower == "rtorrent" %}
+                      -upstream=http://{{ service }}:80
+                      {%- else %}
+                      -upstream=http://{{ service }}:{{ stack['Services'][service]['ports'][0].split(':')[1] }}
+                      {%- endif %}
+                      -redirect-url=https://{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}
+                      -http-address=http://0.0.0.0:4180
+                      -email-domain=gmail.com
+                      -provider=github
+                      -authenticated-emails-file=/authenticated-emails.txt
+      {%- endif %}{%- endfor %}
