@@ -14,14 +14,14 @@ with open(f"{os.environ['CONFIGS']}/templates/compose_generator_parameters.yaml"
 	config = yaml.load(f, Loader = yaml.FullLoader)
 globals = config['Globals']
 defaults = config['Defaults']
-with open('templates/shell_script.jinja.sh') as f:
+with open(f'{os.path.dirname(os.path.realpath(__file__))}/templates/shell_script.jinja.sh') as f:
 
 	shell_script = jinja2.Template(f.read())
-with open('templates/globals.jinja.env') as f:
+with open(f'{os.path.dirname(os.path.realpath(__file__))}/templates/globals.jinja.env') as f:
 	global_env = jinja2.Template(f.read())
-with open('templates/service.jinja.env') as f:
+with open(f'{os.path.dirname(os.path.realpath(__file__))}/templates/service.jinja.env') as f:
 	service_env = jinja2.Template(f.read())
-with open('templates/docker-compose.jinja.yaml') as f:
+with open(f'{os.path.dirname(os.path.realpath(__file__))}/templates/docker-compose.jinja.yaml') as f:
 	compose_yaml = jinja2.Template(f.read())
 for path in globals['Paths']:
 	print(path, globals['Paths'][path])
