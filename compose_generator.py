@@ -15,7 +15,6 @@ with open(f"{os.environ['CONFIGS']}/templates/compose_generator_parameters.yaml"
 globals = config['Globals']
 defaults = config['Defaults']
 with open(f'{os.path.dirname(os.path.realpath(__file__))}/templates/shell_script.jinja.sh') as f:
-
 	shell_script = jinja2.Template(f.read())
 with open(f'{os.path.dirname(os.path.realpath(__file__))}/templates/globals.jinja.env') as f:
 	global_env = jinja2.Template(f.read())
