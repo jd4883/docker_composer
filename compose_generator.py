@@ -4,6 +4,9 @@ import jinja2
 import yaml
 from pathlib import Path
 
+# may be worth adding more dynamic config changes such as traefik.traefik_toml
+# TODO: look into making secrets automatically referenced in config files > text
+
 def mkdir(service_configs):
 	try:
 		os.makedirs(service_configs)

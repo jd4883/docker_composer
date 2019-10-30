@@ -5,7 +5,8 @@ networks:
     frontend:
         external:     True
     backend_vpn:
-        external:     True {% if stack['Volumes'] %}
+        external:     True
+{%- if stack['Volumes'] %}
 volumes:
 {%- for volume in stack['Volumes']|sort %}
     {{ volume|indent }}:
@@ -48,29 +49,30 @@ services:
 {%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service] or stack['Secrets'] %}
         secrets:
 {%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service] %}
-          - {{ service|indent }}_proxy_client_id
-          - {{ service|indent }}_proxy_client_secret
-          - {{ service|indent }}_proxy_cookie_secret    {%- endif %}{%- endif %}
+                      - {{ service|indent }}_proxy_client_id
+                      - {{ service|indent }}_proxy_client_secret
+                      - {{ service|indent }}_proxy_cookie_secret
+{%- endif %}
+{%- endif %}
 {%- for key in stack['Services'][service]['secrets']|sort %}
-          - {{ key }}
+                      - {{ key }}
 {%- endfor %}
         configs:
 {%- if 'configs' in stack['Services'][service] %}
 {%- for conf in stack['Services'][service]['configs'].items()|sort %}
-          -   source:    {{ conf[0] }}
-              target:    {{ conf[1]['Target'] }}
-              uid:       ${PUID}
-              gid:       ${PGID}
-              mode:      0{{ conf[1]['Mask'] }}
+                    - source:    {{ conf[0] }}
+                      target:    {{ conf[1]['Target'] }}
+                      uid:       "{{ defaults['PUID'] }}"
+                      gid:       "{{ defaults['PGID'] }}"
+                      mode:      0{{ conf[1]['Mask'] }}
 {%- endfor %}
 {%- elif not (stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service]) %}      []
 {%- endif %}
 {%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service]  %}
-          -   source:    authenticated-emails
-              target:    /authenticated-emails.txt
-              uid:       ${PUID}
-              gid:       ${PGID}
-              mode:      0444
+                    - source:    authenticated-emails
+                      target:    /authenticated-emails.txt
+                      uid:       "{{ defaults['PUID'] }}"
+                      gid:       "{{ defaults['PGID'] }}"
 {%- endif %}
 {%- if 'tags' in stack['Services'][service]  %}
         image:        {{ stack['Services'][service]['Image']|indent }}:{{ stack['Services'][service]['tags'] }}
@@ -86,9 +88,11 @@ services:
                       - {{ volume }}
 {%- endfor %}
 {%- if stack['Services'][service]['ports'] %}
-        ports:          {% for port in stack['Services'][service]['ports']|sort %}
+        ports:
+{%- for port in stack['Services'][service]['ports']|sort %}
                       - {{ port }}
-{%- endfor %}{% endif %}
+{%- endfor %}
+{%- endif %}
         networks:     {% if 'vpn' in stack['Services'][service]['networks'] %}
                       - backend_vpn
 {%- else %}
@@ -105,26 +109,18 @@ services:
 {%- endfor%}
 {%- endif %}
         deploy:
-{%- if stack['Services'][service]['mode'] != global %}
-            mode:     replicated
-            replicas: 1
-{%- else %}
+{%- if 'mode' in stack['Services'][service] %}
             mode:     global
-{%- endif %}
-{%- if 'manager' in stack['Services'][service] %}
             placement:
                       constraints:    [node.role == manager]
+            restart_policy:
+                      condition:      on-failure
 {%- endif %}
             labels:
-{%- if 'OAUTH_PROXY' in stack['Services'][service] %}
-                 - "traefik.enabled=False"
-{%- elif 'ports' in stack['Services'][service] and stack['Services'][service]['ports']  %}
-                 - "traefik.enabled=True"
-                 - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}"
-                 - "traefik.docker.network=frontend"
-                 - "traefik.port={{ stack['Services'][service]['ports'][0].split(":")[0] }}"
-{%- else %}
-                 - "traefik.enabled=False"
+                      - "traefik.enabled={{ (not 'OAUTH_PROXY' in stack['Services'][service] and 'frontend' in stack['Services'][service]['networks'])|default(False) }}"
+{%- if 'ports' in stack['Services'][service] and stack['Services'][service]['ports'] and not 'OAUTH_PROXY' in stack['Services'][service] %}
+                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}"
+                      - "traefik.port={{ stack['Services'][service]['ports'][0].split(":")[0] }}"
 {%- endif %}
 {%- if 'OAUTH_PROXY' in stack['Services'][service] %}
     {{ service }}_proxy:
@@ -133,11 +129,10 @@ services:
                       - {{ service }}_proxy_client_secret
                       - {{ service }}_proxy_cookie_secret
         configs:
-                    - source:   authenticated-emails
-                      target:   /authenticated-emails.txt
-                      uid:      ${PUID}
-                      gid:      ${PGID}
-                      mode:     0444
+                      - source:   authenticated-emails
+                        target:   /authenticated-emails.txt
+                        uid:      "{{ defaults['PUID'] }}"
+                        gid:      "{{ defaults['PGID'] }}"
         image:        a5huynh/oauth2_proxy:latest
         env_file:
                       - globals.env
@@ -153,10 +148,9 @@ services:
           mode:       replicated
           replicas:   1
           labels:
-                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}"
-                      - "traefik.docker.network=frontend"
-                      - "traefik.port={{ stack['Services'][service]['ports'][0].split(':')[0] }}"
                       - "traefik.enabled=True"
+                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}"
+                      - "traefik.port=4180"
         command:    |
                       -cookie-secure=false
 {%- if service|lower == "rtorrent" %}
