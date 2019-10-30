@@ -117,10 +117,17 @@ services:
                       condition:      on-failure
 {%- endif %}
             labels:
-                      - "traefik.enabled={{ (not 'OAUTH_PROXY' in stack['Services'][service] and 'frontend' in stack['Services'][service]['networks'])|default(False) }}"
+                      - "traefik.enable={{ (not 'OAUTH_PROXY' in stack['Services'][service] and 'frontend' in stack['Services'][service]['networks'])|default(False) }}"
 {%- if 'ports' in stack['Services'][service] and stack['Services'][service]['ports'] and not 'OAUTH_PROXY' in stack['Services'][service] %}
-                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}"
-                      - "traefik.port={{ stack['Services'][service]['ports'][0].split(":")[0] }}"
+                      - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}`)"
+                      - "traefik.docker.lbswarm=true"
+                      - "traefik.docker.network=frontend"
+                      - "traefik.http.routers.{{ service }}.entrypoints=web"
+                      - "traefik.http.routers.{{ service }}.service={{ service }}"
+                      - "traefik.http.services.{{ service }}.loadbalancer.server.port={{ stack['Services'][service]['ports'][0].split(':')[0] }}"
+                      - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
+                      - "traefik.http.services.{{ service }}.loadbalancer.passhostheader=true"
+                      - "traefik.http.services.{{ service }}.loadbalancer.sticky=true"
 {%- endif %}
 {%- if 'OAUTH_PROXY' in stack['Services'][service] %}
     {{ service }}_proxy:
@@ -148,9 +155,16 @@ services:
           mode:       replicated
           replicas:   1
           labels:
-                      - "traefik.enabled=True"
-                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}"
-                      - "traefik.port=4180"
+                      - "traefik.enable=true"
+                      - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}`)"
+                      - "traefik.docker.lbswarm=true"
+                      - "traefik.docker.network=frontend"
+                      - "traefik.http.routers.{{ service }}.entrypoints=web"
+                      - "traefik.http.routers.{{ service }}.service={{ service }}"
+                      - "traefik.http.services.{{ service }}.loadbalancer.server.port=4180"
+                      - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
+                      - "traefik.http.services.{{ service }}.loadbalancer.passhostheader=true"
+                      - "traefik.http.services.{{ service }}.loadbalancer.sticky=true"
         command:    |
                       -cookie-secure=false
 {%- if service|lower == "rtorrent" %}
