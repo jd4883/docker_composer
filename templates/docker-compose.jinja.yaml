@@ -108,7 +108,9 @@ services:
             - "{{ command }}"
 {%- endfor%}
 {%- endif %}
+{%- if 'mode' in stack['Services'][service] or service|lower  == traefik or 'ports' in stack['Services'][service] and stack['Services'][service]['ports'] and not 'OAUTH_PROXY' in stack['Services'][service] %}
         deploy:
+{%- endif %}
 {%- if 'mode' in stack['Services'][service] %}
             mode:     global
             placement:
@@ -116,17 +118,39 @@ services:
             restart_policy:
                       condition:      on-failure
 {%- endif %}
+{%- if service|lower  == traefik  %}
+                      # Dashboard
             labels:
-                      - "traefik.enable={{ (not 'OAUTH_PROXY' in stack['Services'][service] and 'frontend' in stack['Services'][service]['networks'])|default(False) }}"
-{%- if 'ports' in stack['Services'][service] and stack['Services'][service]['ports'] and not 'OAUTH_PROXY' in stack['Services'][service] %}
-                      - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}`)"
-                      #- "traefik.docker.lbswarm=true"
-                      - "traefik.docker.network=frontend"
+                      - "traefik.http.routers.traefik.rule=Host(`traefik.{{ defaults['Domain'] }}`)"
+                      - "traefik.http.routers.traefik.service=api@internal"
+                      - "traefik.http.routers.traefik.tls.certresolver=le"
+                      - "traefik.http.routers.traefik.entrypoints=websecure"
+                      - "traefik.http.routers.traefik.middlewares=authtraefik"
+                      - "traefik.http.middlewares.authtraefik.basicauth.users=user:$$apr1$$q8eZFHjF$$Fvmkk//V6Btlaf2i/ju5n/" # user/password
+
+                      # global redirect to https
+                      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
+                      - "traefik.http.routers.http-catchall.entrypoints=web"
+                      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+
+                      # middleware redirect
+                      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+                      - "traefik.docker.lbswarm=true"
+{%- elif 'ports' in stack['Services'][service] and stack['Services'][service]['ports'] and not 'OAUTH_PROXY' in stack['Services'][service] %}
+            labels:
+                      - "traefik.enable=true"
+                      - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain'] }}`)"
                       - "traefik.http.routers.{{ service }}.entrypoints=websecure"
-                      - "traefik.http.routers.{{ service }}.service={{ service }}"
-                      - "traefik.port={{ stack['Services'][service]['ports'][0].split(':')[0] }}"
-                      # - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
+                      - "traefik.http.routers.{{ service }}.tls=true"
+                      - "traefik.http.routers.{{ service }}.tls.certresolver=le"
+                      - "traefik.http.services.{{ service }}.loadbalancer.server.port={{ stack['Services'][service]['ports'][0].split(':')[0] }}"
+                      - "traefik.docker.lbswarm=true"
+                      #- "traefik.docker.network=frontend"
+
+                      # - "traefik.http.routers.{{ service }}.service={{ service }}"
                       # - "traefik.http.services.{{ service }}.loadbalancer.passhostheader=true"
+                      # - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
+                      # - "traefik.port={{ stack['Services'][service]['ports'][0].split(':')[0] }}"
                       # - "traefik.http.services.{{ service }}.loadbalancer.sticky=true"
 {%- endif %}
 {%- if 'OAUTH_PROXY' in stack['Services'][service] %}
@@ -155,15 +179,24 @@ services:
           mode:       replicated
           replicas:   1
           labels:
-                      - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}`)"
-                      # - "traefik.docker.lbswarm=true"
-                      - "traefik.docker.network=frontend"
+                      - "traefik.enable=true"
+                      - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain'] }}`)"
                       - "traefik.http.routers.{{ service }}.entrypoints=websecure"
-                      - "traefik.http.routers.{{ service }}.service={{ service }}"
-                      - "traefik.port=4180"
-                      # - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
+                      - "traefik.http.routers.{{ service }}.tls=true"
+                      - "traefik.http.routers.{{ service }}.tls.certresolver=le"
+                      - "traefik.http.services.{{ service }}.loadbalancer.server.port=4180"
+                      - "traefik.docker.lbswarm=true"
+                      # - "traefik.enable=true"
+                      # - "traefik.docker.lbswarm=true"
+                      # - "traefik.docker.network=frontend"
+                      # - "traefik.http.routers.{{ service }}.entrypoints=websecure"
+                      # - "traefik.http.routers.{{ service }}.tls.certresolver={{ defaults['Domain']|replace('.com','') }}"
+                      # - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}`)"
+                      # - "traefik.http.routers.{{ service }}.service={{ service }}"
                       # - "traefik.http.services.{{ service }}.loadbalancer.passhostheadeWr=true"
+                      # - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
                       # - "traefik.http.services.{{ service }}.loadbalancer.sticky=true"
+                      # - "traefik.port=4180"
         command:    |
                       -cookie-secure=false
 {%- if service|lower == "rtorrent" %}
@@ -171,10 +204,10 @@ services:
 {%- else %}
                       -upstream=http://{{ service }}:{{ stack['Services'][service]['ports'][0].split(':')[1] }}
 {%- endif %}
-                      -redirect-url=https://{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}
-                      -http-address=http://0.0.0.0:4180
-                      -email-domain=gmail.com
-                      -provider=github
                       -authenticated-emails-file=/authenticated-emails.txt
+                      -email-domain=gmail.com
+                      -http-address=http://0.0.0.0:4180
+                      -provider=github
+                      -redirect-url=https://{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}
 {%- endif %}
 {%- endfor %}
