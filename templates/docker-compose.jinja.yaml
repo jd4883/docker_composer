@@ -46,7 +46,7 @@ secrets:
 services:
 {%- for service in stack['Services']|sort %}
     {{ service|lower }}:
-{%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service] or stack['Secrets'] %}
+{%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service] or stack['Secrets'] or service =="plex_autoscan"  %}
         secrets:
 {%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service] %}
                       - {{ service|indent }}_proxy_client_id
@@ -74,11 +74,7 @@ services:
                       uid:       "{{ defaults['PUID'] }}"
                       gid:       "{{ defaults['PGID'] }}"
 {%- endif %}
-{%- if 'tags' in stack['Services'][service]  %}
-        image:        {{ stack['Services'][service]['Image']|indent }}:{{ stack['Services'][service]['tags'] }}
-{%- else %}
-        image:        {{ stack['Services'][service]['Image']|indent }}:latest
-{%- endif %}
+        image:        {{ stack['Services'][service]['Image'] }}:{{ stack['Services'][service]['tags']|default('latest') }}
         hostname:     {{ service|lower|indent }}
         env_file:
                       - globals.env
@@ -102,7 +98,9 @@ services:
   stack['Services'][service]['networks']['frontend'] and not stack['Services'][service]['OAUTH_PROXY'] %}
                       - frontend
 {%- endif %}
-{%- if stack['Services'][service]['Commands'] %}
+{%- if stack['Services'][service]['Commands'] and service=='vault' %}
+        command:      {{ stack['Services'][service]['Commands'][0] }}
+{%- elif stack['Services'][service]['Commands'] %}
         command:
 {%- for command in stack['Services'][service]['Commands']|sort %}
             - "{{ command }}"
@@ -150,7 +148,6 @@ services:
                       # - "traefik.http.routers.{{ service }}.service={{ service }}"
                       # - "traefik.http.services.{{ service }}.loadbalancer.passhostheader=true"
                       # - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
-                      # - "traefik.port={{ stack['Services'][service]['ports'][0].split(':')[0] }}"
                       # - "traefik.http.services.{{ service }}.loadbalancer.sticky=true"
 {%- endif %}
 {%- if 'OAUTH_PROXY' in stack['Services'][service] %}
@@ -186,17 +183,12 @@ services:
                       - "traefik.http.routers.{{ service }}.tls.certresolver=le"
                       - "traefik.http.services.{{ service }}.loadbalancer.server.port=4180"
                       - "traefik.docker.lbswarm=true"
-                      # - "traefik.enable=true"
-                      # - "traefik.docker.lbswarm=true"
                       # - "traefik.docker.network=frontend"
-                      # - "traefik.http.routers.{{ service }}.entrypoints=websecure"
                       # - "traefik.http.routers.{{ service }}.tls.certresolver={{ defaults['Domain']|replace('.com','') }}"
-                      # - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}`)"
                       # - "traefik.http.routers.{{ service }}.service={{ service }}"
                       # - "traefik.http.services.{{ service }}.loadbalancer.passhostheadeWr=true"
                       # - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
                       # - "traefik.http.services.{{ service }}.loadbalancer.sticky=true"
-                      # - "traefik.port=4180"
         command:    |
                       -cookie-secure=false
 {%- if service|lower == "rtorrent" %}
