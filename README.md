@@ -1,5 +1,19 @@
 # **Docker Composer**
-Docker Composer is a small helper script written in python that allows creation of docker stacks providing bare minimum information in a centralized yaml file. The yaml file should look something like this boilerplate code:
+Docker Composer is a small helper script written in python that allows creation of docker stacks providing bare minimum information in a centralized yaml file.
+
+## **Installation**
+The docker image can be retrieved from its dockerhub registry with the command below. Please at minimum define the path to where you want stack configuration folders and files to be stored (/configs), and a path for where to store the parameters. If a parameters file is not provided with at least one stack and all non-optional parameters are provided, the tool should do its job perfectly.
+    docker pull jb6magic/docker_composer
+The workflow of this program is as follows:  
+* the docker container is launched
+* provided all required parameters are in place, 5 minutes later and every subsequent five minutes the docker-compose.yaml files will be generated
+* Each stack defined in the yaml will print its output path and files will be generated
+* additionally, a setup script is auto generated for each stack which is entirely optional. In my setup, I have 3 helper scripts I've written to keep my docker environment clean and ensure all my exports and aliases match what I intend them to. This can be customized in any way that is useful for your given use case. These scripts are written in bash and are stored automatically with the compose file
+
+### **Disclaimer**
+This program is functional for my setup but has not had a ton of external testing. In early testing, I was able to get almost all desired functionality so I have not perfected all features. What I am saying is there is definitely room for improvement, although functionally it is really simple to setup a series of docker stacks
+
+The yaml file should look something like this boilerplate code:
 
 ## **Sample Yaml Parameters:**
     # Any environmental variable can be set here which will always apply to each container. The value can be overriden by defining it again at the stack service level
@@ -65,4 +79,4 @@ Docker Composer is a small helper script written in python that allows creation 
                 Commands:     
                     - <(optional) list of commands to execute in order. I believe I got this working for a single command versus multiple directives but have not done a ton of testing>
 
-Since I built this tool for personal use and don't anticipate a wide userbase, I kept it pretty simple and there are definitely ways to improve it. 
+Since I built this tool for personal use and don't anticipate a wide userbase, I kept it pretty simple and there are definitely ways to improve it. Feel free to open up issues or PR's to make changes as there are any number of ways this tool can be improved on. 
