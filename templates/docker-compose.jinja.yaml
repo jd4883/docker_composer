@@ -15,8 +15,8 @@ volumes:
 {%- endif %}
 configs:
 {%- for service in stack['Services']|sort %}
-{%- if 'config_files' in stack['Services'][service] %}
-{%- for conf in stack['Services'][service]['config_files']|sort %}
+{%- if 'configs' in stack['Services'][service] %}
+{%- for conf in stack['Services'][service]['configs']|sort %}
     {{ conf }}:
           file:       {{ stack['Services'][service]['configs'][conf]["Source"] }}
 {%- endfor %}
@@ -58,8 +58,8 @@ services:
                       - {{ key }}
 {%- endfor %}
         configs:
-{%- if 'config_files' in stack['Services'][service] %}
-{%- for conf in stack['Services'][service]['config_files'].items()|sort %}
+{%- if 'configs' in stack['Services'][service] %}
+{%- for conf in stack['Services'][service]['configs'].items()|sort %}
                     - source:    {{ conf[0] }}
                       target:    {{ conf[1]['Target'] }}
                       uid:       "{{ defaults['PUID'] }}"
