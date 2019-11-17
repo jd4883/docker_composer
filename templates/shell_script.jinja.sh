@@ -24,6 +24,6 @@ cd -
 {%- for script in globals['Paths']['Scripts'] %}
 {{ script }} &wait
 {%- endfor %}
-# these will get revised to match all paths from configs and from the list
+# these will get revised to match all paths from config_files and from the list
 touch ${LOGS}/ ${CONFIGS}/traefik/acme.json
 echo "baseline data" > ${LOGS}/traefik.log
