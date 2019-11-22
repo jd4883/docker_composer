@@ -15,9 +15,9 @@ ENV SHELL_SCRIPT /config/templates/shell_script.jinja.sh
 ENV GLOBALS_ENV /config/templates/globals.jinja.env
 ENV SERVICE_ENV /config/templates/service.jinja.env
 ENV COMPOSE_YAML /config/templates/docker-compose.jinja.yaml
+ENV STACKS_JSON /stacks.json
 
-
-RUN echo '*/5 *  *  *  * python /config/compose_generator.py' > /etc/crontabs/root; cat /etc/crontabs/root
+RUN echo '*/1 *  *  *  * python /config/compose_generator.py' > /etc/crontabs/root; cat /etc/crontabs/root
 
 RUN ["chmod", "+x", "/config/compose_generator.py", "/config/launcher.sh"]
 CMD ["/usr/sbin/crond", "-f", "-d", "8"]

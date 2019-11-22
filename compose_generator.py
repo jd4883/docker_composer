@@ -2,6 +2,7 @@
 import os
 import jinja2
 import yaml
+import json
 from pathlib import Path
 
 def mkdir(service_configs):
@@ -22,9 +23,11 @@ with open(Path(str(os.environ['SERVICE_ENV']))) as f:
 	service_env = jinja2.Template(f.read())
 with open(Path(str(os.environ['COMPOSE_YAML']))) as f:
 	compose_yaml = jinja2.Template(f.read())
+stack_json = dict()
 for stack in config['Stack Group Name']:
 	services = config['Stack Group Name'][stack]['Services']
 	configs = f"{os.environ['CONFIG']}/{str(stack).lower()}".replace(" ", "_")
+	stack_json[str(stack).lower()] = f"{configs}/docker-compose.yaml"
 	mkdir(configs)
 	print(f"Creating stack configuration: {configs}")
 	with open(Path(str(f"{configs}/globals.env")), "w+") as f:
@@ -39,8 +42,13 @@ for stack in config['Stack Group Name']:
 		environment = services[app]['Environment'] if 'Environment' in services[app] else str()
 		with open(Path(f"{configs}/{app.lower()}.env"), "w+") as f:
 			f.write(service_env.render(environment = environment))
-			
+
 		print(f"Creating stack configuration: {configs}/{app.lower()}.env")
 		with open(Path(f"{configs}/docker-compose.yaml"), "w+") as f:
 			f.write(compose_yaml.render(stack = (config['Stack Group Name'][stack]), defaults = defaults))
 		print(f"Creating stack configuration: {configs}/docker-compose.yaml")
+
+print("Writing JSON file of stacks for a stack rebuild script")
+print(stack_json)
+with open(f"{os.environ['STACKS_JSON']}", 'w+', encoding='utf-8') as f:
+     json.dump(stack_json, f, ensure_ascii=False, indent=4)
