@@ -39,6 +39,8 @@ secrets:
     {{ secret|lower }}:
 {%- if secret == godaddy %}
           file:       ${SECRETS}/{{ service|lower }}/{{ secret|upper }}.secret
+{% elif service|lower == "elasticsearch" %}
+          file:       ${SECRETS}/{{ secret.split('_')[0]|lower|default(service|lower) }}/{{ secret|lower }}.secret
 {%- else %}
           file:       ${SECRETS}/{{ secret.split('_')[0]|lower|default(service|lower) }}/{{ secret|upper }}.secret
 {%- endif %}
@@ -105,6 +107,16 @@ services:
 {%- for command in stack['Services'][service]['Commands']|sort %}
             - "{{ command }}"
 {%- endfor%}
+{%- endif %}
+{%- if 'depends_on' in stack['Services'][service] and stack['Services'][service]['depends_on']  %}
+        depends_on:   {{ stack['Services'][service]['depends_on'] }}
+{%- endif %}
+{%- if 'healthcheck' in stack['Services'][service] and stack['Services'][service]['healthcheck']  %}
+        healthcheck:
+            test:         {{ stack['Services'][service]['healthcheck']['test'] }}
+            interval:     {{ stack['Services'][service]['healthcheck']['interval']|default(30) }}s
+            timeout:      {{ stack['Services'][service]['healthcheck']['timeout']|default(10) }}s
+            retries:      {{ stack['Services'][service]['healthcheck']['retries']|default(5) }}
 {%- endif %}
 {%- if 'mode' in stack['Services'][service] or service|lower  == traefik or 'ports' in stack['Services'][service] and stack['Services'][service]['ports'] and not 'OAUTH_PROXY' in stack['Services'][service] %}
         deploy:
@@ -189,6 +201,8 @@ services:
                       # - "traefik.http.services.{{ service }}.loadbalancer.passhostheadeWr=true"
                       # - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
                       # - "traefik.http.services.{{ service }}.loadbalancer.sticky=true"
+        depends_on:
+                      - {{ service }}
         command:    |
                       -cookie-secure=false
 {%- if service|lower == "rtorrent" %}

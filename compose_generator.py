@@ -26,8 +26,8 @@ with open(Path(str(os.environ['COMPOSE_YAML']))) as f:
 stack_json = dict()
 for stack in config['Stack Group Name']:
 	services = config['Stack Group Name'][stack]['Services']
-	configs = f"{os.environ['CONFIG']}/{str(stack).lower()}".replace(" ", "_")
-	stack_json[str(stack).lower()] = f"{configs}/docker-compose.yaml"
+	configs = f"{os.environ['CONFIG']}/{str(stack.replace(' ', '_')).lower()}"
+	stack_json[str(stack.replace(" ", "_")).lower()] = f"/var/data/configs/{str(stack.replace(' ', '_')).lower()}/docker-compose.yaml"
 	mkdir(configs)
 	print(f"Creating stack configuration: {configs}")
 	with open(Path(str(f"{configs}/globals.env")), "w+") as f:
