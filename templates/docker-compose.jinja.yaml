@@ -25,6 +25,10 @@ configs:
     authenticated-emails:
           file:       ${CONFIGS}/autopirate/authenticated-emails.txt
 secrets:
+    PUID:
+          file:       ${SECRETS}/PUID.secret
+    PGID:
+          file:       ${SECRETS}/PGID.secret
 {%- for service in stack['Services']|sort %}
 {%- if stack['Services'][service]['OAUTH_PROXY'] or 'proxy_secrets' in stack['Services'][service] %}
     {{ service|lower }}_proxy_client_id:
@@ -114,53 +118,39 @@ services:
 {%- if 'healthcheck' in stack['Services'][service] and stack['Services'][service]['healthcheck']  %}
         healthcheck:
             test:         {{ stack['Services'][service]['healthcheck']['test'] }}
-            interval:     {{ stack['Services'][service]['healthcheck']['interval']|default(30) }}s
-            timeout:      {{ stack['Services'][service]['healthcheck']['timeout']|default(10) }}s
-            retries:      {{ stack['Services'][service]['healthcheck']['retries']|default(5) }}
+            interval:     {{ stack['Services'][service]['healthcheck']['interval']|default(30, true) }}s
+            timeout:      {{ stack['Services'][service]['healthcheck']['timeout']|default(10, true) }}s
+            retries:      {{ stack['Services'][service]['healthcheck']['retries']|default(5, true) }}
 {%- endif %}
-{%- if 'mode' in stack['Services'][service] or service|lower  == traefik or 'ports' in stack['Services'][service] and stack['Services'][service]['ports'] and not 'OAUTH_PROXY' in stack['Services'][service] %}
         deploy:
-{%- endif %}
 {%- if 'mode' in stack['Services'][service] %}
             mode:     global
-            placement:
-                      constraints:    [node.role == manager]
-            restart_policy:
-                      condition:      on-failure
 {%- endif %}
-{%- if service|lower  == traefik  %}
-                      # Dashboard
+            resources:
+              limits:
+                cpus:               "{{ stack['Services'][service]['cpu']|default(0, true) }}"
+                memory:             "{{ stack['Services'][service]['ram']|default(0, true) }}G"
+              reservations:
+                cpus:               "{{ 0.5*stack['Services'][service]['cpu']|default(0, true) }}"
+                memory:             "{{ 0.5*stack['Services'][service]['ram']|default(0, true) }}G"
+            placement:
+                constraints:    [node.role == manager]
+            restart_policy:
+                condition:      on-failure
+{%- if stack['Services'][service]['ports'] and not stack['Services'][service] == "traefik" and not
+'OAUTH_PROXY' in stack['Services'][service] and stack['Services'][service] and
+'frontend' in stack['Services'][service]['networks'] and 'subdomains' in stack['Services'][service] %}
             labels:
-                      - "traefik.http.routers.traefik.rule=Host(`traefik.{{ defaults['Domain'] }}`)"
-                      - "traefik.http.routers.traefik.service=api@internal"
-                      - "traefik.http.routers.traefik.tls.certresolver=le"
-                      - "traefik.http.routers.traefik.entrypoints=websecure"
-                      - "traefik.http.routers.traefik.middlewares=authtraefik"
-                      - "traefik.http.middlewares.authtraefik.basicauth.users=user:$$apr1$$q8eZFHjF$$Fvmkk//V6Btlaf2i/ju5n/" # user/password
-
-                      # global redirect to https
-                      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
-                      - "traefik.http.routers.http-catchall.entrypoints=web"
-                      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
-
-                      # middleware redirect
-                      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-                      - "traefik.docker.lbswarm=true"
-{%- elif 'ports' in stack['Services'][service] and stack['Services'][service]['ports'] and not 'OAUTH_PROXY' in stack['Services'][service] %}
-            labels:
+                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'][0] }}.{{ defaults['Domain'] }}"
+                      # need to be adjusted to handle multiple subdomains
+                      - "traefik.backend={{ service }}"
+                      - "traefik.docker.network=frontend"
                       - "traefik.enable=true"
-                      - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain'] }}`)"
-                      - "traefik.http.routers.{{ service }}.entrypoints=websecure"
-                      - "traefik.http.routers.{{ service }}.tls=true"
-                      - "traefik.http.routers.{{ service }}.tls.certresolver=le"
-                      - "traefik.http.services.{{ service }}.loadbalancer.server.port={{ stack['Services'][service]['ports'][0].split(':')[0] }}"
-                      - "traefik.docker.lbswarm=true"
-                      #- "traefik.docker.network=frontend"
-
-                      # - "traefik.http.routers.{{ service }}.service={{ service }}"
-                      # - "traefik.http.services.{{ service }}.loadbalancer.passhostheader=true"
-                      # - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
-                      # - "traefik.http.services.{{ service }}.loadbalancer.sticky=true"
+{%- if stack['Services'][service] == "plex" %}
+                      - "traefik.port=32400"
+{%- else %}
+                      - "traefik.port={{  stack['Services'][service]['ports'][0].split(':')[0] }}"
+{%- endif %}
 {%- endif %}
 {%- if 'OAUTH_PROXY' in stack['Services'][service] %}
     {{ service }}_proxy:
@@ -177,30 +167,22 @@ services:
         env_file:
                       - globals.env
                       - {{ service|lower }}.env
-        networks:
-{%- if vpn %}
+        networks: {% if 'vpn' in stack['Services'][service]['networks'] %}
                       - backend_vpn
 {%- else %}
                       - backend
-                      - frontend
 {%- endif %}
+                      - frontend
         deploy:
           mode:       replicated
           replicas:   1
           labels:
+                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'][0] }}.{{ defaults['Domain'] }}"
+                      - "traefik.backend={{ service }}"
+                      # need to be adjusted to handle multiple subdomains. Since Jinja2 doesn't support list comprehension this is tricky, may be worth making a method in main to
+                      - "traefik.docker.network=frontend"
                       - "traefik.enable=true"
-                      - "traefik.http.routers.{{ service }}.rule=Host(`{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain'] }}`)"
-                      - "traefik.http.routers.{{ service }}.entrypoints=websecure"
-                      - "traefik.http.routers.{{ service }}.tls=true"
-                      - "traefik.http.routers.{{ service }}.tls.certresolver=le"
-                      - "traefik.http.services.{{ service }}.loadbalancer.server.port=4180"
-                      - "traefik.docker.lbswarm=true"
-                      # - "traefik.docker.network=frontend"
-                      # - "traefik.http.routers.{{ service }}.tls.certresolver={{ defaults['Domain']|replace('.com','') }}"
-                      # - "traefik.http.routers.{{ service }}.service={{ service }}"
-                      # - "traefik.http.services.{{ service }}.loadbalancer.passhostheadeWr=true"
-                      # - "traefik.http.services.{{ service }}.loadbalancer.server.scheme=http"
-                      # - "traefik.http.services.{{ service }}.loadbalancer.sticky=true"
+                      - "traefik.port=4180"
         depends_on:
                       - {{ service }}
         command:    |
@@ -214,6 +196,6 @@ services:
                       -email-domain=gmail.com
                       -http-address=http://0.0.0.0:4180
                       -provider=github
-                      -redirect-url=https://{{ stack['Services'][service]['subdomains'] }}.{{ defaults['Domain']}}
+                      -redirect-url=https://{{ stack['Services'][service]['subdomains'][0] }}.{{ defaults['Domain'] }}
 {%- endif %}
 {%- endfor %}
