@@ -89,7 +89,7 @@ services:
 {%- for volume in stack['Services'][service]['Volumes']|sort %}
                       - {{ volume }}
 {%- endfor %}
-{%- if stack['Services'][service]['ports'] %}
+{%- if stack['Services'][service]['ports'] and not stack['Services'][service]["mask_ports"] %}
         ports:
 {%- for port in stack['Services'][service]['ports']|sort %}
                       - {{ port }}
@@ -142,7 +142,6 @@ services:
 'frontend' in stack['Services'][service]['networks'] and 'subdomains' in stack['Services'][service] %}
             labels:
                       - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'][0] }}.{{ defaults['Domain'] }}"
-                      # need to be adjusted to handle multiple subdomains
                       - "traefik.backend={{ service }}"
                       - "traefik.docker.network=frontend"
                       - "traefik.enable=true"
@@ -178,8 +177,6 @@ services:
           replicas:   1
           labels:
                       - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'][0] }}.{{ defaults['Domain'] }}"
-                      - "traefik.backend={{ service }}"
-                      # need to be adjusted to handle multiple subdomains. Since Jinja2 doesn't support list comprehension this is tricky, may be worth making a method in main to
                       - "traefik.docker.network=frontend"
                       - "traefik.enable=true"
                       - "traefik.port=4180"
@@ -197,5 +194,6 @@ services:
                       -http-address=http://0.0.0.0:4180
                       -provider=github
                       -redirect-url=https://{{ stack['Services'][service]['subdomains'][0] }}.{{ defaults['Domain'] }}
+                      #-pass-host-header=false
 {%- endif %}
 {%- endfor %}
