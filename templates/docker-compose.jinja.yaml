@@ -6,18 +6,18 @@ networks:
         external:     True
     backend_vpn:
         external:     True
-{%- if stack['Volumes'] %}
+{%- if stack.Volumes %}
 volumes:
-{%- for volume in stack['Volumes']|sort %}
+{%- for volume in stack.Volumes|sort %}
     {{ volume|indent }}:
           external:   True
 {%- endfor %}{%- endif %}
 configs:
-{%- for service in stack['Services']|sort %}
-{%- if 'configs' in stack['Services'][service] %}
-{%- for conf in stack['Services'][service]['configs']|sort %}
+{%- for service in stack.Services|sort %}
+{%- if 'configs' in stack.Services[service] %}
+{%- for conf in stack.Services[service].configs|sort %}
     {{ conf }}:
-          file:       {{ stack['Services'][service]['configs'][conf]["Source"] }}
+          file:       {{ stack.Services[service].configs.conf.Source }}
           {%- endfor %}{%- endif %}{%- endfor %}
     authenticated-emails:
           file:       ${CONFIGS}/autopirate/authenticated-emails.txt
@@ -26,9 +26,8 @@ secrets:
           file:       ${SECRETS}/PUID.secret
     PGID:
           file:       ${SECRETS}/PGID.secret
-{%- for service in stack['Services']|sort %}
-{%- if stack['Services'][service]['OAUTH_PROXY'] or
-        stack['Services'][service]['proxy_secrets'] %}
+{%- for service in stack.Services|sort %}
+{%- if stack.Services[service].OAUTH_PROXY or stack.Services[service].proxy_secrets %}
     {{ service|lower }}_proxy_client_id:
           file:       ${SECRETS}/{{ service|lower }}/OAUTH2_PROXY_CLIENT_ID.secret
     {{ service|lower }}_proxy_client_secret:
@@ -37,7 +36,7 @@ secrets:
           file:       ${SECRETS}/{{ service|lower }}/OAUTH2_PROXY_COOKIE_SECRET.secret
 {%- endif %}
 {%- endfor %}
-{%- for secret in stack['Secrets']|sort %}
+{%- for secret in stack.Secrets|sort %}
     {{ secret|lower }}:
 {%- if secret == godaddy %}
           file:       ${SECRETS}/{{ service|lower }}/{{ secret|upper }}.secret
@@ -48,124 +47,130 @@ secrets:
 {%- endif %}
 {%- endfor %}
 services:
-{%- for service in stack['Services']|sort %}
+{%- for service in stack.Services|sort %}
     {{ service|lower }}:
-{%- if stack['Services'][service]['OAUTH_PROXY'] or
-        stack['Services'][service]['proxy_secrets'] or
-        stack['Secrets'] or service =="plex_autoscan"  %}
+{%- if stack.Services[service].OAUTH_PROXY or
+        stack.Services[service].proxy_secrets or
+        stack.Secrets or service =="plex_autoscan"  %}
         secrets:
-{%- if stack['Services'][service]['OAUTH_PROXY'] or stack['Services'][service]['proxy_secrets'] %}
+{%- if stack.Services[service].OAUTH_PROXY or stack.Services[service].proxy_secrets %}
                       - {{ service|indent }}_proxy_client_id
                       - {{ service|indent }}_proxy_client_secret
                       - {{ service|indent }}_proxy_cookie_secret
 {%- endif %}
 {%- endif %}
-{%- for key in stack['Services'][service]['secrets']|sort %}
+{%- for key in stack.Services[service].secrets|sort %}
                       - {{ key }}
 {%- endfor %}
         configs:
-{%- if 'configs' in stack['Services'][service] %}
-{%- for conf in stack['Services'][service]['configs'].items()|sort %}
+{%- if 'configs' in stack.Services[service] %}
+{%- for conf in stack.Services[service].configs.items()|sort %}
                     - source:    {{ conf[0] }}
-                      target:    {{ conf[1]['Target'] }}
-                      uid:       "{{ defaults['PUID'] }}"
-                      gid:       "{{ defaults['PGID'] }}"
-                      mode:      0{{ conf[1]['Mask'] }}
+                      target:    {{ conf[1].Target }}
+                      uid:       "{{ defaults.PUID }}"
+                      gid:       "{{ defaults.PGID }}"
+                      mode:      0{{ conf[1].Mask }}
 {%- endfor %}
-{%- elif not (stack['Services'][service]['OAUTH_PROXY'] or
-        stack['Services'][service]['proxy_secrets']) %}      []
+{%- elif not (stack.Services[service].OAUTH_PROXY or stack.Services[service].proxy_secrets) %}      []
 {%- endif %}
-{%- if stack['Services'][service]['OAUTH_PROXY'] or stack['Services'][service]['proxy_secrets'] %}
+{%- if stack.Services[service].OAUTH_PROXY or stack.Services[service].proxy_secrets %}
                     - source:    authenticated-emails
                       target:    /authenticated-emails.txt
-                      uid:       "{{ defaults['PUID'] }}"
-                      gid:       "{{ defaults['PGID'] }}"
+                      uid:       "{{ defaults.PUID }}"
+                      gid:       "{{ defaults.PGID }}"
 {%- endif %}
-        image:        {{ stack['Services'][service]['Image'] }}:{{ stack['Services'][service]['tags']|default('latest') }}
+        image:        {{ stack.Services[service].Image }}:{{ stack.Services[service].tags|default('latest') }}
         hostname:     {{ service|lower|indent }}
+{%- if 'sysctls' in stack.Services[service] %}
+        sysctls:      
+{%- for statement in stack.Services[service].sysctls|sort %}
+                      - "{{ statement }}"
+{%- endfor %}
+{%- endif %}
+{%- if 'user' in stack.Services[service] %}
+        user:         {{ stack.Services[service].user }}
+{%- endif %}
         env_file:
                       - globals.env
                       - {{ service|lower }}.env
         volumes:
-{%- for volume in stack['Services'][service]['Volumes']|sort %}
+{%- for volume in stack.Services[service].Volumes|sort %}
                       - {{ volume }}
-{%- endfor %}
-{%- if stack['Services'][service]['ports'] and not
-        stack['Services'][service]["mask_ports"] %}
+{%- endfor %}{%- if stack.Services[service].ports and not stack.Services[service].mask_ports %}
         ports:
-{%- for port in stack['Services'][service]['ports']|sort %}
+{%- for port in stack.Services[service].ports|sort %}
                       - {{ port }}
-{%- endfor %}
-{%- endif %}
-        networks:     {% if 'vpn' in stack['Services'][service]['networks'] %}
+{%- endfor %}{%- endif %}
+        networks:     {% if 'vpn' in stack.Services[service].networks %}
                       - backend_vpn
 {%- else %}
                       - backend
-{%- endif %}
-{%- if stack['Services'][service]['networks'] and stack['Services'][service]['networks']['frontend'] and not stack['Services'][service]['OAUTH_PROXY'] or stack['Services'][service]['proxy_secrets'] %}
+{%- endif %}{%- if stack.Services[service].networks and stack.Services[service].networks.frontend and not 
+        stack.Services[service].OAUTH_PROXY or stack.Services[service].proxy_secrets %}
                       - frontend
 {%- endif %}
-{%- if stack['Services'][service]['Commands'] and service=='vault' %}
-        command:      {{ stack['Services'][service]['Commands'][0] }}
-{%- elif stack['Services'][service]['Commands'] %}
+{%- if stack.Services[service].Commands and service=='vault' %}
+        command:      {{ stack.Services[service].Commands[0] }}
+{%- elif stack.Services[service].Commands %}
         command:
-{%- for command in stack['Services'][service]['Commands']|sort %}
+{%- for command in stack.Services[service].Commands|sort %}
             - "{{ command }}"
-{%- endfor%}
-{%- endif %}
-{%- if 'depends_on' in stack['Services'][service] and
-        stack['Services'][service]['depends_on']  %}
-        depends_on:   {{ stack['Services'][service]['depends_on'] }}
-{%- endif %}
-{%- if 'healthcheck' in stack['Services'][service] and
-        stack['Services'][service]['healthcheck']  %}
+{%- endfor%}{%- endif %}{%- if 'depends_on' in stack.Services[service] and stack.Services[service].depends_on  %}
+        depends_on:   {{ stack.Services[service].depends_on }}
+{%- endif %}{%- if 'healthcheck' in stack.Services[service] and stack.Services[service].healthcheck %}
         healthcheck:
-            test:         {{ stack['Services'][service]['healthcheck']['test'] }}
-            interval:     {{ stack['Services'][service]['healthcheck']['interval']|default(30, true) }}s
-            timeout:      {{ stack['Services'][service]['healthcheck']['timeout']|default(10, true) }}s
-            retries:      {{ stack['Services'][service]['healthcheck']['retries']|default(5, true) }}
+            test:         {{ stack.Services[service].healthcheck.test }}
+            interval:     {{ stack.Services[service].healthcheck.interval|default(30, true) }}s
+            timeout:      {{ stack.Services[service].healthcheck.timeout|default(10, true) }}s
+            retries:      {{ stack.Services[service].healthcheck.retries|default(5, true) }}
 {%- endif %}
-{%- if 'entrypoint' in stack['Services'][service] %}
+{%- if 'entrypoint' in stack.Services[service] %}
         entrypoint:       |
             bash -c 'bash -s <<EOF
-{%- for entry in stack['Services'][service]['entrypoint'] %}
+{%- for entry in stack.Services[service].entrypoint %}
                 {{ entry }}{% endfor %}
             EOF'
 {%- endif %}
         deploy:
-{%- if 'mode' in stack['Services'][service] %}
+{%- if 'mode' in stack.Services[service] %}
             mode:     global
+            placement:
+                constraints:    [node.role == manager]
 {%- endif %}
             resources:
               limits:
-                cpus:               "{{ stack['Services'][service]['cpu']|default(0, true) }}"
-                memory:             "{{ stack['Services'][service]['ram']|default(0, true) }}G"
+                cpus:               "{{ stack.Services[service].cpu|default(0, true) }}"
+                memory:             "{{ stack.Services[service].ram|default(0, true) }}G"
               reservations:
-                cpus:               "{{ 0.5*stack['Services'][service]['cpu']|default(0, true) }}"
-                memory:             "{{ 0.5*stack['Services'][service]['ram']|default(0, true) }}G"
-            placement:
-                constraints:    [node.role == manager]
+                cpus:               "{{ 0.5*stack.Services.[service].cpu|default(0, true) }}"
+                memory:             "{{ 0.5*stack.Services.[service].ram|default(0, true) }}G"
             restart_policy:
                 condition:      on-failure
-{%- if stack['Services'][service]['ports'] and
-       'subdomains' in stack['Services'][service] and
-       'networks' in stack['Services'][service] and
-       stack['Services'][service]['networks']['frontend'] and not
-       stack['Services'][service]['OAUTH_PROXY'] or
-       stack['Services'][service]['proxy_secrets'] and not
-       stack['Services'][service] == "traefik" %}
+{%- if stack.Services[service].ports and
+       'subdomains' in stack.Services[service] and
+       'networks' in stack.Services[service] and
+       stack.Services[service].networks.frontend and not
+       stack.Services[service].OAUTH_PROXY or
+       stack.Services[service].proxy_secrets and not
+       stack.Services[service] == "traefik" %}
             labels:
-                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'][0] }}.{{ defaults['Domain'] }}"
+                      - "traefik.frontend.rule=Host:{{ stack.Services[service].subdomains[0] }}.{{ defaults.Domain }}"
                       - "traefik.backend={{ service }}"
                       - "traefik.docker.network=frontend"
+                      - "traefik.frontend.headers.STSSeconds=15552000"
+                      - "traefik.frontend.headers.STSIncludeSubdomains=true"
+                      - "traefik.frontend.headers.STSPreload=true"
                       - "traefik.enable=true"
 {%- if stack['Services'][service] == "plex" %}
                       - "traefik.port=32400"
 {%- else %}
-                      - "traefik.port={{  stack['Services'][service]['ports'][0].split(':')[1] }}"
+                      - "traefik.port={{ stack.Services[service].ports[0].split(':')[1] }}"
+{%- endif %}
+{%- if stack.Services[service].https %} 
+                      - "traefik.protocol=https"
 {%- endif %}
 {%- endif %}
-{%- if stack['Services'][service]['OAUTH_PROXY'] or stack['Services'][service]['proxy_secrets'] %}
+{%- if stack.Services[service].OAUTH_PROXY or stack.Services[service].proxy_secrets %}
     {{ service }}_proxy:
         secrets:
                       - {{ service }}_proxy_client_id
@@ -174,13 +179,13 @@ services:
         configs:
                       - source:   authenticated-emails
                         target:   /authenticated-emails.txt
-                        uid:      "{{ defaults['PUID'] }}"
-                        gid:      "{{ defaults['PGID'] }}"
+                        uid:      "{{ defaults.PUID }}"
+                        gid:      "{{ defaults.PGID }}"
         image:        a5huynh/oauth2_proxy:latest
         env_file:
                       - globals.env
                       - {{ service|lower }}.env
-        networks: {% if 'vpn' in stack['Services'][service]['networks'] %}
+        networks: {% if 'vpn' in stack.Services[service].networks %}
                       - backend_vpn
 {%- else %}
                       - backend
@@ -190,8 +195,11 @@ services:
           mode:       replicated
           replicas:   1
           labels:
-                      - "traefik.frontend.rule=Host:{{ stack['Services'][service]['subdomains'][0] }}.{{ defaults['Domain'] }}"
+                      - "traefik.frontend.rule=Host:{{ stack.Services.[service].subdomains[0] }}.{{ defaults.Domain }}"
                       - "traefik.docker.network=frontend"
+                      - "traefik.frontend.headers.STSSeconds=15552000"
+                      - "traefik.frontend.headers.STSIncludeSubdomains=true"
+                      - "traefik.frontend.headers.STSPreload=true"
                       - "traefik.enable=true"
                       - "traefik.port=4180"
         depends_on:
@@ -201,13 +209,13 @@ services:
 {%- if service|lower == "rtorrent" %}
                       -upstream=http://{{ service }}:80
 {%- else %}
-                      -upstream=http://{{ service }}:{{ stack['Services'][service]['ports'][0].split(':')[1] }}
+                      -upstream=http://{{ service }}:{{ stack.Services[service].ports[0].split(':')[1] }}
 {%- endif %}
                       -authenticated-emails-file=/authenticated-emails.txt
                       -email-domain=gmail.com
                       -http-address=http://0.0.0.0:4180
                       -provider=github
-                      -redirect-url=https://{{ stack['Services'][service]['subdomains'][0] }}.{{ defaults['Domain'] }}
+                      -redirect-url=https://{{ stack.Services[service].subdomains[0] }}.{{ defaults.Domain }}
                       #-pass-host-header=false
 {%- endif %}
 {%- endfor %}
