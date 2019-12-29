@@ -10,7 +10,10 @@ COPY requirements.txt /config/
 RUN pip install --upgrade pip; pip install -r requirements.txt
 COPY . /config/
 
+ENV HOSTFILE /configs/hostfile.txt
 ENV CONFIG /configs
+ENV HOSTFILE_TEMPLATE /config/templates/hostfile.jinja.txt
+ENV HOSTFILE /config/hostfile.txt
 ENV SHELL_SCRIPT /config/templates/shell_script.jinja.sh
 ENV GLOBALS_ENV /config/templates/globals.jinja.env
 ENV SERVICE_ENV /config/templates/service.jinja.env

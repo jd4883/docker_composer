@@ -17,6 +17,8 @@ globals = config['Globals']
 defaults = config['Defaults']
 with open(Path(str(os.environ['SHELL_SCRIPT']))) as f:
 	shell_script = jinja2.Template(f.read())
+with open(Path(str(os.environ['HOSTFILE_TEMPLATE']))) as f:
+	hostfile_template = jinja2.Template(f.read())
 with open(Path(os.environ['GLOBALS_ENV'])) as f:
 	global_env = jinja2.Template(f.read())
 with open(Path(str(os.environ['SERVICE_ENV']))) as f:
@@ -24,6 +26,7 @@ with open(Path(str(os.environ['SERVICE_ENV']))) as f:
 with open(Path(str(os.environ['COMPOSE_YAML']))) as f:
 	compose_yaml = jinja2.Template(f.read())
 stack_json = dict()
+hostfile = list()
 for stack in config['Stack Group Name']:
 	services = config['Stack Group Name'][stack]['Services']
 	configs = f"{os.environ['CONFIG']}/{str(stack.replace(' ', '_')).lower()}"
@@ -38,6 +41,9 @@ for stack in config['Stack Group Name']:
 										service = app,
 										defaults = defaults,
 										globals = globals))
+		if 'subdomains' in services[app] and services[app]['subdomains']:
+			for sub in services[app]['subdomains']:
+				hostfile.append(sub)
 		print(f"Creating stack configuration: {configs}/setup.sh")
 		environment = services[app]['Environment'] if 'Environment' in services[app] else str()
 		with open(Path(f"{configs}/{app.lower()}.env"), "w+") as f:
@@ -48,7 +54,10 @@ for stack in config['Stack Group Name']:
 			f.write(compose_yaml.render(stack = (config['Stack Group Name'][stack]), defaults = defaults))
 		print(f"Creating stack configuration: {configs}/docker-compose.yaml")
 
+with open(Path(f"{os.environ['HOSTFILE']}"), "w+") as f:
+	f.write(hostfile_template.render(stack = (config['Stack Group Name'][stack]), defaults = defaults, hosts = hostfile))
 print("Writing JSON file of stacks for a stack rebuild script")
 print(stack_json)
 with open(f"{os.environ['STACKS_JSON']}", 'w+', encoding='utf-8') as f:
      json.dump(stack_json, f, ensure_ascii=False, indent=4)
+

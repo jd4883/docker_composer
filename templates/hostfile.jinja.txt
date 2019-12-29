@@ -1,0 +1,2 @@
+{%- for h in hosts %}{{ defaults['ip'] }}      {{ h }}.{{ defaults['Domain'] }}
+{% endfor -%}
