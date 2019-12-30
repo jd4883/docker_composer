@@ -9,7 +9,7 @@ def get_index(stack):
 
 
 def get_stack_file(stack):
-	return f"{os.environ['CONFIG']}/{str(stack.replace(' ', '_')).lower()}/docker-compose.yaml"
+	return f"{os.environ['HOST_CONFIGS']}/{str(stack.replace(' ', '_')).lower()}/docker-compose.yaml"
 
 
 def set_config_directory(stack):

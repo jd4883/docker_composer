@@ -12,6 +12,7 @@ COPY . /config/
 
 ENV HOSTFILE /configs/hostfile.txt
 ENV CONFIG /configs
+ENV HOST_CONFIGS /var/data/configs
 ENV HOSTFILE_TEMPLATE /config/templates/hostfile.jinja.txt
 ENV HOSTFILE /config/hostfile.txt
 ENV SHELL_SCRIPT /config/templates/shell_script.jinja.sh
