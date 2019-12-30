@@ -1,11 +1,18 @@
 version:    "3.7"
 networks:
     backend:
-        external:         True
+        driver:           overlay
+        ipam:
+            config:
+                  - subnet: {{ defaults.ip|default(172.20) }}.{{ stack.octets[0] }}.0/24
     frontend:
+        name:             {{ defaults.frontend|default(172.20) }}
         external:         True
     backend_vpn:
-        external:         True  {% if stack.Volumes %}
+        driver:           overlay
+        ipam:
+            config:
+                - subnet: {{ defaults.ip|default(172.20) }}.{{ stack.octets[1] }}.0/24    {% if stack.Volumes %}
 volumes:                  {% for volume in stack.Volumes | sort %}
     {{ volume|indent }}:
           external:       True  {% endfor %}{% endif %}
@@ -82,23 +89,24 @@ services: {% for service in stack.Services | sort %}
                 constraints:        [node.role == manager]  {% endif %}
             resources:
                 limits:
-                    cpus:           "{{ stack.Services[service]['cpu'] | default(0, true) }}"
-                    memory:         "{{ stack.Services[service]['ram'] | default(0, true) }}G"
+                    cpus:           "{{ stack.Services[service]['cpu'] | default(0.0, true) }}"
+                    memory:         "{{ stack.Services[service]['ram'] | default(0.0, true) }}G"
                 reservations:
-                    cpus:           "{{ 0.5*stack.Services[service]['cpu'] | default(0, true) }}"
-                    memory:         "{{ 0.5*stack.Services[service]['ram'] | default(0, true) }}G"
+                    cpus:           "{{ 0.5*stack.Services[service]['cpu'] | default(0.0, true) }}"
+                    memory:         "{{ 0.5*stack.Services[service]['ram'] | default(0.0, true) }}G"
             restart_policy:
                 condition:          on-failure  {% if (stack.Services[service]['ports'] and 'subdomains' in stack.Services[service] and 'networks' in stack.Services[service] and stack.Services[service]['networks']['frontend']) and not (stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets']) %}
-            labels: {% if stack.Services[service]['HOSTS'] and ', ' in stack.Services[service]['HOSTS'] %}
-                - "traefik.frontend.rule=Host: {{ stack.Services[service]['HOSTS']|lower }}"                            {% else %}
-                - "traefik.frontend.rule=Host: {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"    {% endif %}
+            labels: # {% if stack.Services[service]['HOSTS'] and ',' in stack.Services[service]['HOSTS'] %}
+                #- "traefik.frontend.rule=Host:{{ stack.Services[service]['HOSTS']|lower }}"{% else %}
+                #- "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"{% endif %}
+                - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
                 - "traefik.backend={{ service }}"
                 - "traefik.docker.network=frontend"
+                - "traefik.enable=true"
+                {%- if service | lower == 'nextcloud' %}
                 - "traefik.frontend.headers.STSSeconds=315360000"
                 - "traefik.frontend.headers.STSIncludeSubdomains=true"
                 - "traefik.frontend.headers.STSPreload=true"
-                - "traefik.enable=true"
-                {%- if service | lower == 'nextcloud' %}
                 - "traefik.frontend.redirect.permanent=true"
                 - "traefik.frontend.redirect.regex=https://(.*)/.well-known/(card|cal)dav"
                 - "traefik.frontend.redirect.replacement=https://$$1/remote.php/dav/"
@@ -132,12 +140,9 @@ services: {% for service in stack.Services | sort %}
             - frontend
         dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}
         deploy:
-        labels:
-                - "traefik.frontend.rule=Host: {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
+            labels:
+                - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
                 - "traefik.docker.network=frontend"
-                - "traefik.frontend.headers.STSSeconds=15552000"
-                - "traefik.frontend.headers.STSIncludeSubdomains=true"
-                - "traefik.frontend.headers.STSPreload=true"
                 - "traefik.enable=true"
                 - "traefik.port=4180"
         depends_on:
