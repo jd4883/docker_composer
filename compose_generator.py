@@ -18,11 +18,14 @@ if __name__ == "__main__":
 		services = set_services(config, stack)
 		gen_globals_env_file(configs, defaults)
 		for app in services:
+			hosts = list()
 			master_stack[get_index(stack)] = get_stack_file(stack)
-			parse_hostfile(services[app], hostfile)
+			parse_hostfile(services[app], hostfile, hosts, defaults)
 			gen_setup_shell_script(stack, app, defaults, globals, configs)
 			gen_app_specific_env_file(configs, app, set_environment(services[app]))
-			gen_docker_yaml(configs, config['Stack Group Name'][stack], defaults)
+			if hosts:
+				gen_docker_yaml(configs, config['Stack Group Name'][stack], defaults, ", ".join(hosts))
+			else:
+				gen_docker_yaml(configs, config['Stack Group Name'][stack], defaults)
 	gen_hostfile(config['Stack Group Name'][stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
-	
