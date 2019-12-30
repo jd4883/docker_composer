@@ -90,7 +90,7 @@ services: {% for service in stack.Services | sort %}
             restart_policy:
                 condition:          on-failure  {% if (stack.Services[service]['ports'] and 'subdomains' in stack.Services[service] and 'networks' in stack.Services[service] and stack.Services[service]['networks']['frontend']) and not (stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets']) %}
             labels:
-                - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
+                - "traefik.frontend.rule=Host:{{ hosts }}"
                 - "traefik.backend={{ service }}"
                 - "traefik.docker.network=frontend"
                 - "traefik.frontend.headers.STSSeconds=315360000"
@@ -131,8 +131,9 @@ services: {% for service in stack.Services | sort %}
             - frontend
         dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}
         deploy:
-            labels:
-                - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
+            labels: {% if hosts %}
+                - "traefik.frontend.rule=Host:{{ hosts }}" {% else %}
+                - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"{% endif %}                           
                 - "traefik.docker.network=frontend"
                 - "traefik.frontend.headers.STSSeconds=15552000"
                 - "traefik.frontend.headers.STSIncludeSubdomains=true"
