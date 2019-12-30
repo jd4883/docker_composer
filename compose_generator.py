@@ -1,63 +1,28 @@
 #!/usr/bin/env python3.7
-import os
-import jinja2
 import yaml
-import json
-from pathlib import Path
 
-def mkdir(service_configs):
-	try:
-		os.makedirs(service_configs)
-	except FileExistsError:
-		# directory already exists
-		pass
-with open(Path(str("/parameters.yaml"))) as f:
-	config = yaml.load(f, Loader = yaml.FullLoader)
-globals = config['Globals']
-defaults = config['Defaults']
-with open(Path(str(os.environ['SHELL_SCRIPT']))) as f:
-	shell_script = jinja2.Template(f.read())
-with open(Path(str(os.environ['HOSTFILE_TEMPLATE']))) as f:
-	hostfile_template = jinja2.Template(f.read())
-with open(Path(os.environ['GLOBALS_ENV'])) as f:
-	global_env = jinja2.Template(f.read())
-with open(Path(str(os.environ['SERVICE_ENV']))) as f:
-	service_env = jinja2.Template(f.read())
-with open(Path(str(os.environ['COMPOSE_YAML']))) as f:
-	compose_yaml = jinja2.Template(f.read())
-stack_json = dict()
-hostfile = list()
-for stack in config['Stack Group Name']:
-	services = config['Stack Group Name'][stack]['Services']
-	configs = f"{os.environ['CONFIG']}/{str(stack.replace(' ', '_')).lower()}"
-	stack_json[str(stack.replace(" ", "_")).lower()] = f"/var/data/configs/{str(stack.replace(' ', '_')).lower()}/docker-compose.yaml"
-	mkdir(configs)
-	print(f"Creating stack configuration: {configs}")
-	with open(Path(str(f"{configs}/globals.env")), "w+") as f:
-		f.write(global_env.render(defaults = defaults))
-	for app in services:
-		with open(Path(str(f"{configs}/setup.sh")), "w+") as f:
-			f.write(shell_script.render(stack_group = str(stack).lower().replace(" ", "_"),
-										service = app,
-										defaults = defaults,
-										globals = globals))
-		if 'subdomains' in services[app] and services[app]['subdomains']:
-			for sub in services[app]['subdomains']:
-				hostfile.append(sub)
-		print(f"Creating stack configuration: {configs}/setup.sh")
-		environment = services[app]['Environment'] if 'Environment' in services[app] else str()
-		with open(Path(f"{configs}/{app.lower()}.env"), "w+") as f:
-			f.write(service_env.render(environment = environment))
+from src.generators import *
+from src.gets import get_index, get_stack_file, set_config_directory
+from src.parser import parse_hostfile
+from src.sets import set_environment, set_services
+from src.helpers import *
 
-		print(f"Creating stack configuration: {configs}/{app.lower()}.env")
-		with open(Path(f"{configs}/docker-compose.yaml"), "w+") as f:
-			f.write(compose_yaml.render(stack = (config['Stack Group Name'][stack]), defaults = defaults))
-		print(f"Creating stack configuration: {configs}/docker-compose.yaml")
-
-with open(Path(f"{os.environ['HOSTFILE']}"), "w+") as f:
-	f.write(hostfile_template.render(stack = (config['Stack Group Name'][stack]), defaults = defaults, hosts = hostfile))
-print("Writing JSON file of stacks for a stack rebuild script")
-print(stack_json)
-with open(f"{os.environ['STACKS_JSON']}", 'w+', encoding='utf-8') as f:
-     json.dump(stack_json, f, ensure_ascii=False, indent=4)
-
+if __name__ == "__main__":
+	config = yaml.load(open(Path(str("/parameters.yaml"))), Loader = yaml.FullLoader)
+	globals = config['Globals']
+	defaults = config['Defaults']
+	hostfile = list()
+	master_stack = dict()
+	for stack in config['Stack Group Name']:
+		configs = set_config_directory(stack)
+		services = set_services(config, stack)
+		gen_globals_env_file(configs, defaults)
+		for app in services:
+			master_stack[get_index(stack)] = get_stack_file(stack)
+			parse_hostfile(services[app], hostfile)
+			gen_setup_shell_script(stack, app, defaults, globals, configs)
+			gen_app_specific_env_file(configs, app, set_environment(services[app]))
+			gen_docker_yaml(configs, config['Stack Group Name'][stack], defaults)
+	gen_hostfile(config['Stack Group Name'][stack], defaults, hostfile)
+	gen_master_stack_file(master_stack)
+	
