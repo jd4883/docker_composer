@@ -89,8 +89,9 @@ services: {% for service in stack.Services | sort %}
                     memory:         "{{ 0.5*stack.Services[service]['ram'] | default(0, true) }}G"
             restart_policy:
                 condition:          on-failure  {% if (stack.Services[service]['ports'] and 'subdomains' in stack.Services[service] and 'networks' in stack.Services[service] and stack.Services[service]['networks']['frontend']) and not (stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets']) %}
-            labels:
-                - "traefik.frontend.rule=Host:{{ hosts }}"
+            labels: {% if stack.Services[service]['HOSTS'] and ', ' in stack.Services[service]['HOSTS'] %}
+                - "traefik.frontend.rule=Host: {{ stack.Services[service]['HOSTS']|lower }}"                            {% else %}
+                - "traefik.frontend.rule=Host: {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"    {% endif %}
                 - "traefik.backend={{ service }}"
                 - "traefik.docker.network=frontend"
                 - "traefik.frontend.headers.STSSeconds=315360000"
@@ -131,9 +132,8 @@ services: {% for service in stack.Services | sort %}
             - frontend
         dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}
         deploy:
-            labels: {% if hosts %}
-                - "traefik.frontend.rule=Host:{{ hosts }}" {% else %}
-                - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"{% endif %}                           
+        labels:
+                - "traefik.frontend.rule=Host: {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
                 - "traefik.docker.network=frontend"
                 - "traefik.frontend.headers.STSSeconds=15552000"
                 - "traefik.frontend.headers.STSIncludeSubdomains=true"
@@ -151,3 +151,5 @@ services: {% for service in stack.Services | sort %}
             -http-address=http://0.0.0.0:4180
             -provider=github
             -redirect-url=https://{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}  {% endif %} {% endfor %}
+            # for now if oauth only 1 subdomain is allowed. Will need to setup forwarding for these. Can likely use API commands to automate this
+            # if not oauth i grab all subdomains

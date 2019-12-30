@@ -23,9 +23,7 @@ if __name__ == "__main__":
 			parse_hostfile(services[app], hostfile, hosts, defaults)
 			gen_setup_shell_script(stack, app, defaults, globals, configs)
 			gen_app_specific_env_file(configs, app, set_environment(services[app]))
-			if hosts:
-				gen_docker_yaml(configs, config['Stack Group Name'][stack], defaults, ", ".join(hosts))
-			else:
-				gen_docker_yaml(configs, config['Stack Group Name'][stack], defaults)
+			services[app]['HOSTS'] = ", ".join(hosts)
+			gen_docker_yaml(configs, config['Stack Group Name'][stack], defaults)
 	gen_hostfile(config['Stack Group Name'][stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
