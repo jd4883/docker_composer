@@ -1,26 +1,15 @@
 version:    "3.7"
 networks:
     backend:
-        driver:           overlay
+        driver:           bridge
         ipam:
             config:
                   - subnet: {{ defaults.ip|default(172.20) }}.{{ stack.octets[0] }}.0/24
     frontend:
-        name:             {{ defaults.frontend|default(172.20) }}
-        external:         True
-    backend_vpn:
-        driver:           overlay
-        ipam:
-            config:
-                - subnet: {{ defaults.ip|default(172.20) }}.{{ stack.octets[1] }}.0/24    {% if stack.Volumes %}
-volumes:                  {% for volume in stack.Volumes | sort %}
-    {{ volume|indent }}:
-          external:       True  {% endfor %}{% endif %}
-configs:
-    authenticated-emails:
-        file:             ${CONFIGS}/autopirate/authenticated-emails.txt  {% for service in stack.Services | sort %}{% if 'configs' in stack.Services[service] %}{% for conf in stack.Services[service]['configs'] | sort %}
-    {{ conf }}:
-        file:             {{ stack.Services[service]['configs']['conf']['Source'] }}{% endfor %}{% endif %}{% endfor %}
+        external:         True  {% if stack.Volumes %}
+volumes:        {% for volume in stack.Volumes | sort %}
+{{ volume|indent(4,true) }}:
+        external:         True  {% endfor %}{% endif %}
 secrets:
     PUID:
         file:             ${SECRETS}/PUID.secret
@@ -37,28 +26,25 @@ secrets:
         file:             ${SECRETS}/{{ secret.split('_')[0]|lower|default(service|lower) }}/{{ secret|upper }}.secret  {% endif %}{% endfor %}
 services: {% for service in stack.Services | sort %}
     {{ service|lower }}:  {% if stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] or stack.Secrets or service == "plex_autoscan" %}
+        container_name: {{ service|indent(8,true) }}
         secrets:
             - PUID
             - PGID        {% if stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
             - {{ service|indent }}_proxy_client_id
             - {{ service|indent }}_proxy_client_secret
             - {{ service|indent }}_proxy_cookie_secret {% endif %}{% endif %}{% for key in stack.Services[service]['secrets'] | sort %}
-            - {{ key }}   {% endfor %}
-        configs:          {% if  not 'configs' in stack.Services[service] %}[] {% else %}{% for conf in stack.Services[service]['configs'].items() | sort %}
-            - source:     {{ conf[0] }}
-              target:     {{ conf[1].Target }}
-              uid:        "{{ defaults.PUID }}"
-              gid:        "{{ defaults.PGID }}"
-              mode:       0{{ conf[1].Mask }}    {% endfor %}
-            - source:     authenticated-emails
-              target:     /authenticated-emails.txt
-              uid:        "{{ defaults.PUID }}"
-              gid:        "{{ defaults.PGID }}"   {% endif %}
-        image:            {{ stack.Services[service]['Image'] }}:{{ stack.Services[service]['tags'] | default('latest') }}
-        hostname:         {{ service|lower|indent }}        {% if 'sysctls' in stack.Services[service] %}
-        sysctls:          {% for statement in stack.Services[service]['sysctls'] | sort %}
-            - "{{ statement }}"       {% endfor %}{% endif %}{% if 'user' in stack.Services[service] %}
-        user:             {{ stack.Services[service]['user'] }}        {% endif %}
+            - {{ key }}   {% endfor %} {% if stack.Services[service]['cap_add'] %}
+        cap_add: {% for cap in stack.Services[service]['cap_add'] %}
+            - {{ cap }} {% endfor %}  {% endif %}{% if stack.Services[service]['cap_drop'] %}
+        cap_drop: {% for cap in stack.Services[service]['cap_drop'] %}
+            - {{ cap }} {% endfor %}  {% endif %}
+        image: {{ stack.Services[service]['Image']|indent(12,true) }}:{{ stack.Services[service]['tags'] | default('latest') }}  {% if stack.Services[service]['networks'] and not stack.Services[service]['networks']['vpn'] %}
+        hostname: {{ service|lower|indent(10,true) }}{% endif %}{% if 'sysctls' in stack.Services[service] %}
+        sysctls:            {% for statement in stack.Services[service]['sysctls'] | sort %}
+            - "{{ statement|indent }}"       {% endfor %}{% endif %}{% if stack.Services[service]["privileged"] %}
+        privileged:         true
+        user:               "0:0"{% else %}
+        user:               "{{ defaults.PUID }}:{{ defaults.PGID }}"{% endif %}
         env_file:
             - globals.env
             - {{ service|lower }}.env
@@ -66,14 +52,20 @@ services: {% for service in stack.Services | sort %}
             - {{ volume }}  {% endfor %}{% if stack.Services[service]['ports'] and not stack.Services[service]['mask_ports'] %}
         ports: {% for port in stack.Services[service]['ports']|sort %}
             - {{ port }}{% endfor %}{% endif %}
-        networks: {% if 'vpn' in stack.Services[service]['networks'] %}
-            - backend_vpn{% else %}
-            - backend {% endif %}{% if stack.Services[service]['networks'] and stack.Services[service]['networks']['frontend'] and not stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
-            - frontend  {% endif %}{% if stack.Services[service]['Commands'] and service=='vault' %}
+        domainname:         {{ defaults.Domain|default("localhost")}} {% if stack.Services[service]['networks'] and not stack.Services[service]['networks']['vpn'] %}
+        dns:  {% if not stack.Services[service]['DNS'] %} {% for nameserver in defaults.DNS %}
+            - {{ nameserver }}  {% endfor %} {% else %} {% for nameserver in stack.Services[service]['DNS'] %}
+            - {{ nameserver }}  {% endfor %} {% endif %} {% endif %}        {% if (stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn']) %}
+        network_mode:           "service:{{ defaults.VPN_CONTAINER }}" {% else %}
+        networks:
+            - backend   {% if stack.Services[service]['networks'] and stack.Services[service]['networks']['frontend'] and not stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
+            - frontend  {% endif %}  {% endif %} {% if stack.Services[service]['Commands'] and service=='vault' %}
         command:        {{ stack.Services[service]['Commands'][0] }}{% elif stack.Services[service]['Commands'] %}
         command:        {% for command in stack.Services[service]['Commands'] | sort %}
-            - "{{ command }}"{% endfor%}{% endif %}{% if 'depends_on' in stack.Services[service] and stack.Services[service]['depends_on'] %}
-        depends_on:     {{ stack.Services[service]['depends_on'] }}{% endif %}{% if 'healthcheck' in stack.Services[service] and stack.Services[service]['healthcheck'] %}
+            - "{{ command }}"{% endfor%}{% endif %}{% if ('depends_on' in stack.Services[service] and stack.Services[service]['depends_on']) or (stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn']) %}
+        depends_on:     {% for dependency in stack.Services[service]['depends_on'] %}
+            - {{ dependency }}              {% endfor %} {% if stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn'] %}
+            - {{ defaults.VPN_CONTAINER }}  {% endif %} {% endif %} {% if 'healthcheck' in stack.Services[service] and stack.Services[service]['healthcheck'] %}
         healthcheck:
             test:       {{ stack.Services[service]['healthcheck']['test'] }}
             interval:   {{ stack.Services[service]['healthcheck']['interval'] | default(30, true) }}s
@@ -83,78 +75,80 @@ services: {% for service in stack.Services | sort %}
             bash -c 'bash -s <<EOF  {% for entry in stack.Services[service]["entrypoint"] %}
                 {{ entry }}{% endfor %}
             EOF'        {% endif %}
-        deploy:         {% if 'mode' in stack.Services[service] %}
-            mode:                   global
-            placement:
-                constraints:        [node.role == manager]  {% endif %}
-            resources:
-                limits:
-                    cpus:           "{{ stack.Services[service]['cpu'] | default(0.0, true) }}"
-                    memory:         "{{ stack.Services[service]['ram'] | default(0.0, true) }}G"
-                reservations:
-                    cpus:           "{{ 0.5*stack.Services[service]['cpu'] | default(0.0, true) }}"
-                    memory:         "{{ 0.5*stack.Services[service]['ram'] | default(0.0, true) }}G"
-            restart_policy:
-                condition:          on-failure  {% if (stack.Services[service]['ports'] and 'subdomains' in stack.Services[service] and 'networks' in stack.Services[service] and stack.Services[service]['networks']['frontend']) and not (stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets']) %}
-            labels: # {% if stack.Services[service]['HOSTS'] and ',' in stack.Services[service]['HOSTS'] %}
-                #- "traefik.frontend.rule=Host:{{ stack.Services[service]['HOSTS']|lower }}"{% else %}
-                #- "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"{% endif %}
-                - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
-                - "traefik.backend={{ service }}"
-                - "traefik.docker.network=frontend"
-                - "traefik.enable=true"
-                {%- if service | lower == 'nextcloud' %}
-                - "traefik.frontend.headers.STSSeconds=315360000"
-                - "traefik.frontend.headers.STSIncludeSubdomains=true"
-                - "traefik.frontend.headers.STSPreload=true"
-                - "traefik.frontend.redirect.permanent=true"
-                - "traefik.frontend.redirect.regex=https://(.*)/.well-known/(card|cal)dav"
-                - "traefik.frontend.redirect.replacement=https://$$1/remote.php/dav/"
-                - "traefik.frontend.headers.SSLRedirect=true"
-                - "traefik.frontend.headers.browserXSSFilter=true"
-                - "traefik.frontend.headers.contentTypeNosniff=true"
-                - "traefik.frontend.headers.forceSTSHeader=true"
-                - "traefik.frontend.headers.SSLHost={{ defaults.Domain }}"
-                - "traefik.frontend.headers.frameDeny=true"   {% endif %}
-                {%- if stack['Services'][service] == "plex" %}
-                - "traefik.port=32400"    {% else %}
-                - "traefik.port={{ stack.Services[service]['ports'][0].split(':')[1] | replace('/tcp', '') }}"
-        dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}    {% endif %}{% endif %}{% if stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
+        restart:                always
+        labels:
+            - "service.name={{ service | lower }}"  {% if stack.Services[service]['labels'] %}{% for label in stack.Services[service]['labels'] %}    # placeholder
+            - {{ label }}   {% endfor %}{% endif %}
+{%- if not stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
+{%- if stack.Services[service]['labels'] or (stack.Services[service]['ports'] and stack.Services[service]['subdomains'] and stack.Services[service]['networks'] and stack.Services[service]['networks']['frontend']) %}
+            - "traefik.enable=true"
+            - "traefik.protocol=http"
+            - "traefik.backend={{ service }}" {% if stack.Services[service]['HOSTS'] and ',' in stack.Services[service]['HOSTS'] %}
+            - "traefik.frontend.rule=Host:{{ stack.Services[service]['HOSTS']|lower }}"{% else %}
+            - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}" {% endif %}{% if stack.Services[service] == "plex" %}
+            - "traefik.port=32400"    {% else %}
+            - "traefik.port={{ stack.Services[service]['ports'][0].split(':')[1] | replace('/tcp', '') | replace('/udp', '') }}" {% endif %}
+            - "traefik.docker.network=frontend"
+            - "traefik.frontend.headers.SSLRedirect=true"
+            - "traefik.frontend.headers.SSLForceHost=true"
+            - "traefik.frontend.headers.STSSeconds=315360000"
+            - "traefik.frontend.headers.browserXSSFilter=true"
+            - "traefik.frontend.headers.contentTypeNosniff=true"
+            - "traefik.frontend.headers.forceSTSHeader=true"
+            - "traefik.frontend.headers.customResponseHeaders=X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex"
+            - "traefik.frontend.headers.customFrameOptionsValue='allow-from https:expectedbehaviors.com'"
+            - "traefik.frontend.headers.SSLHost={{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
+            - "traefik.frontend.headers.STSIncludeSubdomains=true"
+            - "traefik.frontend.headers.STSPreload=true"
+            - "traefik.frontend.headers.frameDeny=true"
+        dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}    {% endif %}{% else %}
     {{ service }}_proxy:
+        container_name: {{ service|indent(8,true) }}_proxy
         secrets:
             - {{ service }}_proxy_client_id
             - {{ service }}_proxy_client_secret
             - {{ service }}_proxy_cookie_secret
-        configs:
-            - source:   authenticated-emails
-              target:   /authenticated-emails.txt
-              uid:      "{{ defaults.PUID }}"
-              gid:      "{{ defaults.PGID }}"
         image:          a5huynh/oauth2_proxy:latest
         env_file:
             - globals.env
             - {{ service|lower }}.env
-        networks:     {% if 'vpn' in stack.Services[service]['networks'] %}
-            - backend_vpn{% else %}
-            - backend{% endif %}
+        volumes:
+            - ${CONFIGS}/autopirate/authenticated-emails.txt:/authenticated-emails.txt:ro
+        user:                 "{{ defaults.PUID }}:{{ defaults.PGID }}"
+        networks:
+            - backend
             - frontend
         dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}
-        deploy:
-            labels:
-                - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
-                - "traefik.docker.network=frontend"
-                - "traefik.enable=true"
-                - "traefik.port=4180"
+        dns:  {% if not stack.Services[service]['DNS'] %}{% for nameserver in defaults.DNS %}
+            - {{ nameserver }}  {% endfor %} {% else %} {% for nameserver in stack.Services[service]['DNS'] %}
+            - {{ nameserver }} {% endfor %} {% endif %}
+        restart:                always
+        labels:
+            - "traefik.enable=true"
+            - "traefik.backend={{ service }}"
+            - "traefik.protocol=http"
+            - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
+            - "traefik.port=4180"
+            - "traefik.docker.network=frontend"
+            - "traefik.frontend.headers.SSLRedirect=true"
+            - "traefik.frontend.headers.SSLForceHost=true"
+            - "traefik.frontend.headers.STSSeconds=315360000"
+            - "traefik.frontend.headers.browserXSSFilter=true"
+            - "traefik.frontend.headers.contentTypeNosniff=true"
+            - "traefik.frontend.headers.forceSTSHeader=true"
+            - "traefik.frontend.headers.customResponseHeaders=X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex"
+            - "traefik.frontend.headers.customFrameOptionsValue='allow-from https:expectedbehaviors.com'"
+            - "traefik.frontend.headers.SSLHost={{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
+            - "traefik.frontend.headers.STSIncludeSubdomains=true"
+            - "traefik.frontend.headers.STSPreload=true"
+            - "traefik.frontend.headers.frameDeny=true"
         depends_on:
             - {{ service }}
         command:    |
-            -cookie-secure=false  {% if service|lower == "rtorrent" %}
-            -upstream=http://{{ service }}:80 {% else %}
-            -upstream=http://{{ service }}:{{ stack.Services[service]['ports'][0].split(':')[1] }}  {% endif %}
+            -cookie-secure=false
+            -upstream=http://{{ service }}:{{ stack.Services[service]['ports'][0].split(':')[1] }}
             -authenticated-emails-file=/authenticated-emails.txt
             -email-domain=gmail.com
             -http-address=http://0.0.0.0:4180
             -provider=github
             -redirect-url=https://{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}  {% endif %} {% endfor %}
-            # for now if oauth only 1 subdomain is allowed. Will need to setup forwarding for these. Can likely use API commands to automate this
-            # if not oauth i grab all subdomains
