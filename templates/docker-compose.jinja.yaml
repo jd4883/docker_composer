@@ -59,28 +59,12 @@ services: {% for service in stack.Services | sort %}
         network_mode:           "service:{{ defaults.VPN_CONTAINER }}" {% else %}
         networks:
             - backend   {% if stack.Services[service]['networks'] and stack.Services[service]['networks']['frontend'] and not stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
-            - frontend  {% endif %}  {% endif %} {% if stack.Services[service]['Commands'] and service=='vault' %}
-        command:        {{ stack.Services[service]['Commands'][0] }}{% elif stack.Services[service]['Commands'] %}
-        command:        {% for command in stack.Services[service]['Commands'] | sort %}
-            - "{{ command }}"{% endfor%}{% endif %}{% if ('depends_on' in stack.Services[service] and stack.Services[service]['depends_on']) or (stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn']) %}
-        depends_on:     {% for dependency in stack.Services[service]['depends_on'] %}
-            - {{ dependency }}              {% endfor %} {% if stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn'] %}
-            - {{ defaults.VPN_CONTAINER }}  {% endif %} {% endif %} {% if 'healthcheck' in stack.Services[service] and stack.Services[service]['healthcheck'] %}
-        healthcheck:
-            test:       {{ stack.Services[service]['healthcheck']['test'] }}
-            interval:   {{ stack.Services[service]['healthcheck']['interval'] | default(30, true) }}s
-            timeout:    {{ stack.Services[service]['healthcheck']['timeout'] | default(10, true) }}s
-            retries:    {{ stack.Services[service]['healthcheck']['retries'] | default(5, true) }}  {% endif %}{% if 'entrypoint' in stack.Services[service] %}
-        entrypoint:     |
-            bash -c 'bash -s <<EOF  {% for entry in stack.Services[service]["entrypoint"] %}
-                {{ entry }}{% endfor %}
-            EOF'        {% endif %}
-        restart:                always
+            - frontend  {% endif %}  {% endif %}
         labels:
-            - "service.name={{ service | lower }}"  {% if stack.Services[service]['labels'] %}{% for label in stack.Services[service]['labels'] %}    # placeholder
+            - service.name={{ service | lower }}  {% if stack.Services[service]['labels'] %}{% for label in stack.Services[service]['labels'] %}
             - {{ label }}   {% endfor %}{% endif %}
 {%- if not stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
-{%- if stack.Services[service]['labels'] or (stack.Services[service]['ports'] and stack.Services[service]['subdomains'] and stack.Services[service]['networks'] and stack.Services[service]['networks']['frontend']) %}
+{%- if stack.Services[service]['ports'] and stack.Services[service]['subdomains'] and stack.Services[service]['networks'] and stack.Services[service]['networks']['frontend'] %}
             - "traefik.enable=true"
             - "traefik.protocol=http"
             - "traefik.backend={{ service }}" {% if stack.Services[service]['HOSTS'] and ',' in stack.Services[service]['HOSTS'] %}
@@ -101,7 +85,23 @@ services: {% for service in stack.Services | sort %}
             - "traefik.frontend.headers.STSIncludeSubdomains=true"
             - "traefik.frontend.headers.STSPreload=true"
             - "traefik.frontend.headers.frameDeny=true"
-        dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}    {% endif %}{% else %}
+        dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}    {% endif %} {% endif %}      {% if 'Commands' in stack.Services[service] and stack.Services[service]['Commands'][0] is defined %}
+        command:        {% for command in stack.Services[service]['Commands'] | sort %}
+            - "{{ command }}"{% endfor%}{% endif %}{% if ('depends_on' in stack.Services[service] and stack.Services[service]['depends_on']) or (stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn']) %}
+        depends_on:     {% for dependency in stack.Services[service]['depends_on'] %}
+            - {{ dependency }}              {% endfor %} {% if stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn'] %}
+            - {{ defaults.VPN_CONTAINER }}  {% endif %} {% endif %} {% if 'healthcheck' in stack.Services[service] and stack.Services[service]['healthcheck'] %}
+        healthcheck:
+            test:       {{ stack.Services[service]['healthcheck']['test'] }}
+            interval:   {{ stack.Services[service]['healthcheck']['interval'] | default(30, true) }}s
+            timeout:    {{ stack.Services[service]['healthcheck']['timeout'] | default(10, true) }}s
+            retries:    {{ stack.Services[service]['healthcheck']['retries'] | default(5, true) }}  {% endif %}{% if 'entrypoint' in stack.Services[service] %}
+        entrypoint:     |
+            bash -c 'bash -s <<EOF  {% for entry in stack.Services[service]["entrypoint"] %}
+                {{ entry }}{% endfor %}
+            EOF'        {% endif %}
+        restart:                always
+{%- if stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
     {{ service }}_proxy:
         container_name: {{ service|indent(8,true) }}_proxy
         secrets:
