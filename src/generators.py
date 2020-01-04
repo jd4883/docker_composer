@@ -5,15 +5,16 @@ from pathlib import Path
 from src.helpers import load_template
 
 
-def gen_docker_yaml(configs, stack, defaults):
+def gen_docker_yaml(configs, stack, defaults, stack_name):
 	open(Path(f"{configs}/docker-compose.yaml"), "w+").write(load_template('COMPOSE_YAML').render(stack = stack,
-	                                                                                              defaults = defaults))
+	                                                                                              defaults = defaults,
+																								  stack_name = stack_name))
 	print(f"Creating stack configuration: {configs}/docker-compose.yaml")
 
 def gen_app_specific_env_file(configs, app, environment):
 	print(f"Creating stack configuration: {configs}/{app.lower()}.env")
 	open(Path(f"{configs}/{app.lower()}.env"), "w+").write(load_template('SERVICE_ENV').render(environment = environment))
-	
+
 def gen_globals_env_file(configs, defaults):
 	open(Path(str(f"{configs}/globals.env")), "w+").write(load_template('GLOBALS_ENV').render(defaults = defaults))
 

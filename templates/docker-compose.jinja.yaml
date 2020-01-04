@@ -1,154 +1,400 @@
-version:    "3.7"
-networks:
-    backend:
-        driver:           bridge
-        ipam:
-            config:
-                  - subnet: {{ defaults.ip|default(172.20) }}.{{ stack.octets[0] }}.0/24
-    frontend:
-        external:         True  {% if stack.Volumes %}
-volumes:        {% for volume in stack.Volumes | sort %}
-{{ volume|indent(4,true) }}:
-        external:         True  {% endfor %}{% endif %}
-secrets:
-    PUID:
-        file:             ${SECRETS}/PUID.secret
-    PGID:
-        file:             ${SECRETS}/PGID.secret  {% for service in stack.Services|sort %}{% if stack.Services[service].OAUTH_PROXY or stack.Services[service].proxy_secrets %}
-    {{ service|lower }}_proxy_client_id:
-        file:             ${SECRETS}/{{ service|lower }}/OAUTH2_PROXY_CLIENT_ID.secret
-    {{ service|lower }}_proxy_client_secret:
-        file:             ${SECRETS}/{{ service|lower }}/OAUTH2_PROXY_CLIENT_SECRET.secret
-    {{ service|lower }}_proxy_cookie_secret:
-        file:             ${SECRETS}/{{ service|lower }}/OAUTH2_PROXY_COOKIE_SECRET.secret  {% endif %}{% endfor %}{% for secret in stack.Secrets|sort %}
-    {{ secret|lower }}:   {% if service|lower == "elasticsearch" %}
-        file:             ${SECRETS}/{{ secret.split('_')[0]|lower|default(service|lower) }}/{{ secret|lower }}.secret  {% else %}
-        file:             ${SECRETS}/{{ secret.split('_')[0]|lower|default(service|lower) }}/{{ secret|upper }}.secret  {% endif %}{% endfor %}
-services: {% for service in stack.Services | sort %}
-    {{ service|lower }}:  {% if stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] or stack.Secrets or service == "plex_autoscan" %}
-        container_name: {{ service|indent(8,true) }}
-        secrets:
-            - PUID
-            - PGID        {% if stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
-            - {{ service|indent }}_proxy_client_id
-            - {{ service|indent }}_proxy_client_secret
-            - {{ service|indent }}_proxy_cookie_secret {% endif %}{% endif %}{% for key in stack.Services[service]['secrets'] | sort %}
-            - {{ key }}   {% endfor %} {% if stack.Services[service]['cap_add'] %}
-        cap_add: {% for cap in stack.Services[service]['cap_add'] %}
-            - {{ cap }} {% endfor %}  {% endif %}{% if stack.Services[service]['cap_drop'] %}
-        cap_drop: {% for cap in stack.Services[service]['cap_drop'] %}
-            - {{ cap }} {% endfor %}  {% endif %}
-        image: {{ stack.Services[service]['Image']|indent(12,true) }}:{{ stack.Services[service]['tags'] | default('latest') }}  {% if stack.Services[service]['networks'] and not stack.Services[service]['networks']['vpn'] %}
-        hostname: {{ service|lower|indent(10,true) }}{% endif %}{% if 'sysctls' in stack.Services[service] %}
-        sysctls:            {% for statement in stack.Services[service]['sysctls'] | sort %}
-            - "{{ statement|indent }}"       {% endfor %}{% endif %}{% if stack.Services[service]["privileged"] %}
-        privileged:         true
-        user:               "0:0"{% else %}
-        user:               "{{ defaults.PUID }}:{{ defaults.PGID }}"{% endif %}
-        env_file:
-            - globals.env
-            - {{ service|lower }}.env
-        volumes:          {% for volume in stack.Services[service]['Volumes'] | sort %}
-            - {{ volume }}  {% endfor %}{% if stack.Services[service]['ports'] and not stack.Services[service]['mask_ports'] %}
-        ports: {% for port in stack.Services[service]['ports']|sort %}
-            - {{ port }}{% endfor %}{% endif %}
-        domainname:         {{ defaults.Domain|default("localhost")}} {% if stack.Services[service]['networks'] and not stack.Services[service]['networks']['vpn'] %}
-        dns:  {% if not stack.Services[service]['DNS'] %} {% for nameserver in defaults.DNS %}
-            - {{ nameserver }}  {% endfor %} {% else %} {% for nameserver in stack.Services[service]['DNS'] %}
-            - {{ nameserver }}  {% endfor %} {% endif %} {% endif %}        {% if (stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn']) %}
-        network_mode:           "service:{{ defaults.VPN_CONTAINER }}" {% else %}
-        networks:
-            - backend   {% if stack.Services[service]['networks'] and stack.Services[service]['networks']['frontend'] and not stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
-            - frontend  {% endif %}  {% endif %}
-        labels:
-            - service.name={{ service | lower }}  {% if stack.Services[service]['labels'] %}{% for label in stack.Services[service]['labels'] %}
-            - {{ label }}   {% endfor %}{% endif %}
-{%- if not stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
-{%- if stack.Services[service]['ports'] and stack.Services[service]['subdomains'] and stack.Services[service]['networks'] and stack.Services[service]['networks']['frontend'] %}
-            - "traefik.enable=true"
-            - "traefik.protocol=http"
-            - "traefik.backend={{ service }}" {% if stack.Services[service]['HOSTS'] and ',' in stack.Services[service]['HOSTS'] %}
-            - "traefik.frontend.rule=Host:{{ stack.Services[service]['HOSTS']|lower }}"{% else %}
-            - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}" {% endif %}{% if stack.Services[service] == "plex" %}
-            - "traefik.port=32400"    {% else %}
-            - "traefik.port={{ stack.Services[service]['ports'][0].split(':')[1] | replace('/tcp', '') | replace('/udp', '') }}" {% endif %}
-            - "traefik.docker.network=frontend"
-            - "traefik.frontend.headers.SSLRedirect=true"
-            - "traefik.frontend.headers.SSLForceHost=true"
-            - "traefik.frontend.headers.STSSeconds=315360000"
-            - "traefik.frontend.headers.browserXSSFilter=true"
-            - "traefik.frontend.headers.contentTypeNosniff=true"
-            - "traefik.frontend.headers.forceSTSHeader=true"
-            - "traefik.frontend.headers.customResponseHeaders=X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex"
-            - "traefik.frontend.headers.customFrameOptionsValue='allow-from https:expectedbehaviors.com'"
-            - "traefik.frontend.headers.SSLHost={{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
-            - "traefik.frontend.headers.STSIncludeSubdomains=true"
-            - "traefik.frontend.headers.STSPreload=true"
-            - "traefik.frontend.headers.frameDeny=true"
-        dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}    {% endif %} {% endif %}      {% if 'Commands' in stack.Services[service] and stack.Services[service]['Commands'][0] is defined %}
-        command:        {% for command in stack.Services[service]['Commands'] | sort %}
-            - "{{ command }}"{% endfor%}{% endif %}{% if ('depends_on' in stack.Services[service] and stack.Services[service]['depends_on']) or (stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn']) %}
-        depends_on:     {% for dependency in stack.Services[service]['depends_on'] %}
-            - {{ dependency }}              {% endfor %} {% if stack.Services[service]['networks'] and stack.Services[service]['networks']['vpn'] %}
-            - {{ defaults.VPN_CONTAINER }}  {% endif %} {% endif %} {% if 'healthcheck' in stack.Services[service] and stack.Services[service]['healthcheck'] %}
+{#- MASTER VARIABLES #}
+{%- set IP = defaults.ip | default(172.20) %}
+{%- set OCTET = stack.octets[0] %}
+{%- set OAUTH_PORT = defaults.OAUTH_PORT | string %}
+{%- set BACKEND_SUBNET | wordwrap %}{{ IP }}.{{ OCTET }}.0/24{% endset %}
+{%- set SERVICES = stack.Services %}
+{%- set VOLUMES = stack.Volumes %}
+{%- set PUID = defaults.PUID %}
+{%- set PGID = defaults.PUID %}
+{%- set SECRETS = stack.Secrets %}
+{%- set DOMAIN = defaults.Domain %}
+{%- set VPN_CONTAINER | wordwrap %}{{ stack_name | lower | replace(" ", "-") + "-" + defaults.VPN_CONTAINER }}
+{% endset %}{# END MASTER VARIABLES #}
+
+
+
+{#- MASTER DNS BLOCK #}
+{%- set TRAEFIK_DEFAULTS | wordwrap(width=1000) %}{{ "- \"" | indent(10, true) + "traefik.enable=true" }}"
+{{ "- \"" | indent(10,true) + "traefik.protocol=http" }}"
+{{ "- \"" | indent(10,true) + "traefik.docker.network=frontend" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.SSLRedirect=true" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.SSLForceHost=true" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.STSSeconds=315360000" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.browserXSSFilter=true" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.contentTypeNosniff=true" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.forceSTSHeader=true" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.customResponseHeaders=X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.customFrameOptionsValue='allow-from https:" + DOMAIN + "'" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.STSIncludeSubdomains=true" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.STSPreload=true" }}"
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.frameDeny=true" }}"
+{% endset %}{# END MASTER DNS BLOCK #}
+
+
+
+{{- "version:" + "\"" | indent(41,true) + defaults.docker_version | string }}"
+
+
+
+{#- GLOBAL NETWORKS BLOCK #}
+{{ "networks:" }}
+{{ "backend:" | indent(4,true) }}
+{{ "driver:" | indent(8,true) + "bridge" | indent(34,true) }}
+{{ "ipam:" | indent(8,true) }}
+{{ "config:" | indent(10, true) }}
+{{ "- subnet:" | indent(14,true) +  BACKEND_SUBNET | indent(26,true) }}
+{{ "frontend:" | indent(4,true) }}
+{{ "external:"  | indent(8,true) + "True" | indent(32,true) }}
+{#- END GLOBAL NETWORKS BLOCK #}
+
+
+
+{#- GLOBAL SECRETS BLOCK #}
+{{ "secrets:" }}
+{{ "PUID:" | indent(4,true) }}
+{{ "file:" |indent(8, true) + "${SECRETS}/PUID.secret" | indent(36,true) }}
+{{ "PGID:" | indent(4,true) }}
+{{ "file:" |indent(8, true) + "${SECRETS}/PGID.secret" | indent(36,true) }}
+{%- for service in SERVICES | sort %} {# FOR EACH SERVICE IN STACK #}
+{%- if SERVICES[service].OAUTH_PROXY or SERVICES[service].proxy_secrets %}    {# IS OAUTH PROXY #}
+{{ service|lower|replace(" ", "-") | indent(4, true)  + "_proxy_client_id:" }}
+{{ "file:" |indent(8, true) + "${SECRETS}/" | indent(36, true) + service|lower|replace(" ", "-") + "/OAUTH2_PROXY_CLIENT_ID.secret" }}
+{{ service|lower|replace(" ", "-") | indent(4, true)  + "_proxy_client_secret:" }}
+{{ "file:" |indent(8, true) + "${SECRETS}/" | indent(36, true) + service|lower|replace(" ", "-") + "/OAUTH2_PROXY_CLIENT_SECRET.secret" }}
+{{ service|lower|replace(" ", "-") | indent(4, true)  + "_proxy_cookie_secret:" }}
+{{ "file:" |indent(8, true) + "${SECRETS}/" | indent(36, true) + service|lower|replace(" ", "-") + "/OAUTH2_PROXY_COOKIE_SECRET.secret" }}
+{%- endif %}  {# END IS OAUTH PROXY #}
+{%- endfor %} {# END FOR EACH SERVICE IN STACK #}
+{%- for secret in SECRETS | sort %}
+{{ secret | lower | indent(4, true) }}:
+{%- if service|lower|replace(" ", "-") == "elasticsearch" %}    {# IF SERVICE IS ELASTICSEARCH #}
+{{ "file:" |indent(8, true) + "${SECRETS}/" | indent(36, true) + secret.split('_')[0]|lower|default(service|lower|replace(" ", "-")) + "/" + secret|lower + ".secret" }}
+{%- else %}
+{{ "file:" |indent(8, true) + "${SECRETS}/" | indent(36, true) + secret.split('_')[0]|lower|default(service|lower|replace(" ", "-")) + "/" + secret|upper + ".secret" }}
+{%- endif %}
+{#- END IF SERVICE IS ELASTICSEARCH #}
+{%- endfor %}
+{#- END FOR EACH SERVICE IN STACK #}
+{#- END GLOBAL SECRETS BLOCK #}
+
+
+
+{#- GLOBAL VOLUMES BLOCK #}
+{%- if VOLUMES %}   {# IF GLOBAL VOLUMES ARE DEFINED #}
+{{ "volumes:" }}
+{%- for volume in VOLUMES | sort %}   {# FOR EACH GLOBAL VOLUME DEFINITION #}
+{{ volume |indent(4,true) + ":" }}
+{{ "external:" | indent(8, true) + "True" | indent(32, true) }}
+{%- endfor %}   {# END FOR EACH GLOBAL VOLUME DEFINITION #}
+{%- endif %}
+{#- END IF GLOBAL VOLUMES ARE DEFINED #}
+
+
+{#- LOOP THROUGH ALL SERVICES GLOBALLY IN STACK #}
+{{ "services:" }}
+{%- for service in SERVICES | sort %} {# GLOBAL SERVICES BLOCK #}
+{%- if 'vpn' in service %}  {# CONDITIONAL - SERVICE USES VPN #}
+{{ stack_name|lower|replace(" ", "-") | indent(4, true) + "-" + service|lower|replace(" ", "-") + ":" }}
+{{ "container_name:" |indent(8,true) + stack_name|lower | indent(26, true) + "-" + service|lower|replace(" ", "-") }}
+{%- else %}
+{{ service|lower|replace(" ", "-") | indent(4, true) + ":" }}
+{{ "container_name:" | indent(8, true) + service | indent(26, true) }}
+{{ "hostname:" | indent(8, true) + service | lower | replace(" ", "-") | indent(32, true) }}
+{%- endif %}
+{%- endif %}  {# END CONDITIONAL - SERVICE USES VPN #}
+{{ "image:" | indent(8, true) + SERVICES[service]['Image']|indent(35,true) + ":" + SERVICES[service]['tags'] | default('latest') }}
+
+
+
+{#- DOCKER BUILD ARGUMENTS BLOCK #}
+{%- if SERVICES[service]['build'] and SERVICES[service]['build']['args'][0] is defined %}   {# IF BUILD ARGUMENTS ARE DEFINED FOR CONTAINER #}
+{{ "build:" | indent(8, true) + "[]" | indent(29, true) }}
+{%- endif %}  {# END IF BUILD ARGUMENTS ARE DEFINED FOR CONTAINER #}
+{#- END DOCKER BUILD ARGUMENTS BLOCK #}
+
+
+
+{#- DOCKER SECRETS BLOCK #}
+{%- if SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] or SECRETS %}   {# IF THERE ARE SECRETS TO PARSE FOR THIS CONTAINER #}
+{{ "secrets:" | indent(8, true) }}
+{{ "- PUID" | indent(10, true) }}
+{{ "- PGID" | indent(10, true) }}
+{%- if SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] %}    {# IF CONTAINER USES OAUTH #}
+{{ "- " | indent(10, true) + service|lower|replace(" ", "-") + "_proxy_client_id" }}
+{{ "- " | indent(10, true) + service|lower|replace(" ", "-") + "_proxy_client_secret" }}
+{{ "- " | indent(10, true) + service|lower|replace(" ", "-") + "_proxy_cookie_secret" }}
+{%- endif %}    {# IF CONTAINER USES OAUTH #}
+{%- for key in SERVICES[service]['secrets'] | sort %}   {# FOR SECRET IN CONTAINER #}
+{{ "- " | indent(10, true) + key }}
+{%- endfor %}   {# END FOR SECRET IN CONTAINER #}
+{%- endif %}    {# IF THERE ARE SECRETS TO PARSE FOR THIS CONTAINER #}
+{#- END DOCKER SECRETS BLOCK #}
+
+
+
+{#- CAPABILITIES ADD BLOCK #}
+{%- if SERVICES[service]['cap_add'] %}    {# IF CAPABILITIES ADD FLAGGED #}
+{{ "cap_add:" | indent(8, true) }}
+{%- for cap in SERVICES[service]['cap_add'] %}    {# FOR EACH FLAGGED CAPABILITY #}
+{{ "- " | indent(10, true) + cap }}
+{%- endfor %}   {# END FOR EACH FLAGGED CAPABILITY #}
+{%- endif %}    {# END IF CAPABILITIES ADD FLAGGED #}
+{#- END CAPABILITIES ADD BLOCK #}
+
+
+
+{#- CAPABILITIES DROP BLOCK #}
+{%- if SERVICES[service]['cap_drop'] %}           {# IF CAPABILITIES DROP FLAGGED #}
+{%- for cap in SERVICES[service]['cap_drop'] %}   {# FOR EACH FLAGGED CAPABILITY DROP #}
+{{ "cap_drop:" | indent(8, true) }}
+{{ "- " | indent(10, true) + cap }}
+{%- endfor %}     {# FOR EACH FLAGGED CAPABILITY DROP #}
+{%- endif %}      {# IF CAPABILITIES DROP FLAGGED #}
+{#- END CAPABILITIES DROP BLOCK #}
+
+
+
+{#- BEGIN SYSTEMCTL CONFIGURATION BLOCK #}
+{%- if 'sysctls' in SERVICES[service] %}    {# IF SYSTEMCTL FLAGS ARE IN USE #}
+{{ "sysctls:" | indent(8, true) }}
+{%- for statement in SERVICES[service]['sysctls'] | sort %}   {# FOR EACH FLAGGED SYSTEMCTL FLAG #}
+{{ "- " | indent(10, true)+ "\"" + statement + "\"" }}
+{%- endfor %}   {# END FOR EACH FLAGGED SYSTEMCTL FLAG #}
+{%- endif %}    {# END IF SYSTEMCTL FLAGS ARE IN USE #}
+{#- END SYSTEMCTL CONFIGURATION BLOCK #}
+
+
+
+{#- BEGIN USER & GROUP CONFIGURATION BLOCK #}
+{%- if SERVICES[service]["privileged"] %}     {# IF PRIVELEGED BOOL #}
+{{ "privileged:" | indent(8, true) + "true" | indent(30, true) }}
+{%- else %}   {# CREATE PUID/PGID MAPPING #}
+{{ "user:" | indent(8, true) + "\"" | indent(36, true) + PUID | string + ":" + PGID | string + "\"" }}
+{%- endif %}      {# END IF PRIVELEGED BOOL #}
+{#- END USER & GROUP CONFIGURATION BLOCK #}
+
+
+
+{#- ENVIRONMENT VARIABLE FILES #}
+{{ "env_file:" | indent(8, true) }}
+{{ "- globals.env" | indent(10, true) }}
+{{ "- " | indent(10, true) + service|lower|replace(" ", "-") + ".env" }}
+{#- END ENVIRONMENT VARIABLE FILES #}
+
+
+
+{#- CONTAINER VOLUME MAPPINGS #}
+{{ "volumes:" | indent(8, true) }}
+{%- for volume in SERVICES[service]['Volumes'] | sort %}    {# FOR EACH VOLUME DEFINED FOR THE SERVICE #}
+{{ "- " | indent(10, true) + volume }}
+{%- endfor %}   {# END FOR EACH VOLUME DEFINED FOR THE SERVICE #}
+{#- END CONTAINER VOLUME MAPPINGS #}
+
+
+
+{#- LOCAL EXPOSED PORTS #}
+{%- if SERVICES[service]['ports'] and not SERVICES[service]['mask_ports'] %}    {# IF PORTS DEFINED #}
+{{ "ports:" | indent(8, true) }}
+{%- for port in SERVICES[service]['ports'] | sort %}        {# LOOP THROUGH PORT MAPPINGS #}
+{{ "- " | indent(10, true) + port }}
+{%- endfor %}       {# END LOOP THROUGH PORT MAPPINGS #}
+{%- endif %}        {# END IF PORTS DEFINED #}
+{#- END LOCAL EXPOSED PORTS #}
+
+
+
+{#- DNS PARAMETERS #}
+{{"domainname:" | indent(8, true) + DOMAIN|default("localhost") | indent(30, true) }}
+{%- if SERVICES[service]['networks'] and not SERVICES[service]['networks']['vpn'] %}    {# IF VPN FLAG ENABLED #}
+{{ "dns:" | indent(8, true) }}
+{%- if not SERVICES[service]['DNS'] %}      {# IF DNS NOT DEFINED AT THE CONTAINER LEVEL #}
+{%- for nameserver in defaults.DNS %}       {# ITERATE THROUGH DEFAULT NAMESERVERS #}
+{{ "- " | indent(10, true) + nameserver }}
+{%- endfor %}                               {# FINSH ITERATE THROUGH DEFAULT NAMESERVERS #}
+{%- else %}
+{% for nameserver in SERVICES[service]['DNS'] %}    {# LOOP THROUGH CONTAINER DNS SERVERS #}
+{{ "- " | indent(10, true) + nameserver }}
+{%- endfor %}         {# END LOOP THROUGH CONTAINER DNS SERVERS #}
+{%- endif %}            {# COMPLETED PARSING DNS SERVERS FROM DICTIONARY #}
+{%- endif %}            {# END IF VPN FLAG ENABLED #}
+{#- END DNS PARAMETERS #}
+
+
+
+{#- NETWORK MODE SETTINGS #}
+{%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn'] and SERVICES[service]['subdomains']) %}      {# IF VPN FLAGGED ON #}
+{{ "network_mode:" | indent(8, true) +  "\"service:" | indent(28, true) + VPN_CONTAINER + "\"" }} {% elif SERVICES[service]['subdomains'] is defined %}
+{{ "dns_search:" | indent(8,true) + SERVICES[service]['subdomains'][0] | indent(30,true) + "." + DOMAIN }}
+{{ "networks:" | indent(8, true) }}
+{{ "- backend" | indent(10, true) }}
+{%- if SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend'] and not SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] %}    {# IF FRONTEND FLAGGED ON AND OAUTH NOT ENABLED FOR CONTAINER #}
+{{ "- frontend" | indent(10, true) }}
+{%- endif %}    {# END IF FRONTEND FLAGGED ON AND OAUTH NOT ENABLED FOR CONTAINER #}
+{%- endif %}    {# ENDIF VPN FLAGGED ON #}
+{#- END NETWORK MODE SETTINGS #}
+
+
+{#- CONTAINER LABELS #}
+{%- if not SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] %}
+{%- if SERVICES[service]['ports'] and SERVICES[service]['subdomains'] and SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend'] %}
+{%- if SERVICES[service]['HOSTS'] and ',' in SERVICES[service]['HOSTS'] %}
+{{ "labels:" | indent(8,true) }}
+{%- if 'vpn' in service %}
+{{ "- \"" | indent(10,true) + service + "-" + "service.name=" + stack_name + "-" + service|lower|replace(" ", "-") }}"
+{%- else %}
+{{ "- \"" | indent(10,true) + "service.name=" + service|lower|replace(" ", "-") }}"
+{%- endif %}
+{{ "- \"" | indent(10,true) + "traefik.frontend.rule=Host: " + SERVICES[service]['HOSTS']|lower + "." + DOMAIN + "\""}}
+{%- else %}
+{{ "- \"" | indent(10,true) + "traefik.frontend.rule=Host:" + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\""}}
+{%- endif %}
+{{ "- \"" | indent(10,true) + "traefik.frontend.headers.SSLHost=" + SERVICES[service]['subdomains'][0] + "." + DOMAIN }}"
+{%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
+{{ "- \"" | indent(10,true) + "traefik.backend=" + VPN_CONTAINER|lower|replace(" ", "-") }}"
+{%- else %}
+{{ "- \"" | indent(10,true) + "traefik.backend=" + service|lower|replace(" ", "-") }}"
+{%- endif %}
+{%- if SERVICES[service] == "plex" %}
+{{ "- \"" | indent(10,true) + "traefik.port=32400" }}"
+{%- else %}
+{{ "- \"" | indent(10,true) + "traefik.port" + "=" + SERVICES[service]['ports'][0].split(':')[1] | replace('/tcp', '') | replace('/udp', '') }}"
+{%- endif %}
+{{ TRAEFIK_DEFAULTS }}
+{%- if SERVICES[service]['labels'] %}
+{%- for label in SERVICES[service]['labels'] %}
+{{ "- \"" | indent(10, true) + label }}"
+{%- endfor %}
+{%- endif %}
+{%- endif %}
+{%- endif %}
+{#- END CONTAINER LABELS #}
+
+
+
+{%- if 'Commands' in SERVICES[service] and SERVICES[service]['Commands'][0] is defined %}
+        command:        {% for command in SERVICES[service]['Commands'] | sort %}
+{{ "- \"" | indent(10, true) + command }}"{% endfor%}{% endif %}{% if ('depends_on' in SERVICES[service] and SERVICES[service]['depends_on']) or (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
+{{ "depends_on:" | indent(8,true)}}
+{%- for dependency in SERVICES[service]['depends_on'] %}
+            - {{ dependency }}              {% endfor %} {% if SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn'] %}
+            - {{ VPN_CONTAINER }}  {% endif %} {% endif %} {% if 'healthcheck' in SERVICES[service] and SERVICES[service]['healthcheck'] %}
         healthcheck:
-            test:       {{ stack.Services[service]['healthcheck']['test'] }}
-            interval:   {{ stack.Services[service]['healthcheck']['interval'] | default(30, true) }}s
-            timeout:    {{ stack.Services[service]['healthcheck']['timeout'] | default(10, true) }}s
-            retries:    {{ stack.Services[service]['healthcheck']['retries'] | default(5, true) }}  {% endif %}{% if 'entrypoint' in stack.Services[service] %}
+            test:       {{ SERVICES[service]['healthcheck']['test'] }}
+            interval:   {{ SERVICES[service]['healthcheck']['interval'] | default(30, true) }}s
+            timeout:    {{ SERVICES[service]['healthcheck']['timeout'] | default(10, true) }}s
+            retries:    {{ SERVICES[service]['healthcheck']['retries'] | default(5, true) }}  {% endif %}{% if 'entrypoint' in SERVICES[service] %}
         entrypoint:     |
-            bash -c 'bash -s <<EOF  {% for entry in stack.Services[service]["entrypoint"] %}
+            bash -c 'bash -s <<EOF  {% for entry in SERVICES[service]["entrypoint"] %}
                 {{ entry }}{% endfor %}
-            EOF'        {% endif %}
-        restart:                always
-{%- if stack.Services[service]['OAUTH_PROXY'] or stack.Services[service]['proxy_secrets'] %}
-    {{ service }}_proxy:
-        container_name: {{ service|indent(8,true) }}_proxy
-        secrets:
-            - {{ service }}_proxy_client_id
-            - {{ service }}_proxy_client_secret
-            - {{ service }}_proxy_cookie_secret
-        image:          a5huynh/oauth2_proxy:latest
-        env_file:
-            - globals.env
-            - {{ service|lower }}.env
-        volumes:
-            - ${CONFIGS}/autopirate/authenticated-emails.txt:/authenticated-emails.txt:ro
-        user:                 "{{ defaults.PUID }}:{{ defaults.PGID }}"
-        networks:
-            - backend
-            - frontend
-        dns_search:             {{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}
-        dns:  {% if not stack.Services[service]['DNS'] %}{% for nameserver in defaults.DNS %}
-            - {{ nameserver }}  {% endfor %} {% else %} {% for nameserver in stack.Services[service]['DNS'] %}
-            - {{ nameserver }} {% endfor %} {% endif %}
-        restart:                always
-        labels:
-            - "traefik.enable=true"
-            - "traefik.backend={{ service }}"
-            - "traefik.protocol=http"
-            - "traefik.frontend.rule=Host:{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
-            - "traefik.port=4180"
-            - "traefik.docker.network=frontend"
-            - "traefik.frontend.headers.SSLRedirect=true"
-            - "traefik.frontend.headers.SSLForceHost=true"
-            - "traefik.frontend.headers.STSSeconds=315360000"
-            - "traefik.frontend.headers.browserXSSFilter=true"
-            - "traefik.frontend.headers.contentTypeNosniff=true"
-            - "traefik.frontend.headers.forceSTSHeader=true"
-            - "traefik.frontend.headers.customResponseHeaders=X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex"
-            - "traefik.frontend.headers.customFrameOptionsValue='allow-from https:expectedbehaviors.com'"
-            - "traefik.frontend.headers.SSLHost={{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}"
-            - "traefik.frontend.headers.STSIncludeSubdomains=true"
-            - "traefik.frontend.headers.STSPreload=true"
-            - "traefik.frontend.headers.frameDeny=true"
-        depends_on:
-            - {{ service }}
-        command:    |
-            -cookie-secure=false
-            -upstream=http://{{ service }}:{{ stack.Services[service]['ports'][0].split(':')[1] }}
-            -authenticated-emails-file=/authenticated-emails.txt
-            -email-domain=gmail.com
-            -http-address=http://0.0.0.0:4180
-            -provider=github
-            -redirect-url=https://{{ stack.Services[service]['subdomains'][0] }}.{{ defaults.Domain }}  {% endif %} {% endfor %}
+            EOF'
+{%- endif %}
+
+
+
+{#- RESTART SETTINGS #}
+{{ "restart:" | indent(8,true) + "always" | indent(33,true) }}
+{#- END RESTART SETTINGS #}
+
+
+
+{%- if SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] %}
+{{ service|lower|replace(" ", "-") | indent(4, true) + "_proxy:" }}
+{{ "container_name:" | indent(8, true) + service|indent(26,true) + "_proxy" }}
+{{ "image:" | indent(8, true) + "a5huynh/oauth2_proxy:latest" | indent(35,true) }}
+
+
+
+{#- DOCKER SECRETS BLOCK #}
+{{ "secrets:" | indent(8, true) }}
+{{ "- " | indent(10, true) + service|lower|replace(" ", "-") + "_proxy_client_id" }}
+{{ "- " | indent(10, true) + service|lower|replace(" ", "-") + "_proxy_client_secret" }}
+{{ "- " | indent(10, true) + service|lower|replace(" ", "-") + "_proxy_cookie_secret" }}
+{#- END DOCKER SECRETS BLOCK #}
+
+
+
+{#- ENVIRONMENT VARIABLE FILES #}
+{{ "env_file:" | indent(8, true) }}
+{{ "- globals.env" | indent(10, true) }}
+{{ "- " | indent(10, true) + service|lower|replace(" ", "-") + ".env" }}
+{#- END ENVIRONMENT VARIABLE FILES #}
+
+
+
+{#- CONTAINER VOLUME MAPPINGS #}
+{{ "volumes:" | indent(8, true) }}
+{{ "- " | indent(10, true) + "${CONFIGS}/autopirate/authenticated-emails.txt:/authenticated-emails.txt:ro" }}
+{#- END CONTAINER VOLUME MAPPINGS #}
+
+
+
+{#- PROXY CONTAINER USER & GROUP MAPPINGS #}
+{{ "user:" | indent(8, true) + "\"" | indent(36, true) + PUID | string + ":" + PGID | string + "\"" }}
+{#- END PROXY CONTAINER USER & GROUP MAPPINGS #}
+
+
+
+{#- NETWORK MODE SETTINGS #}
+{%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
+{{ "network_mode:" | indent(8, true) +  "\"service:" | indent(28, true) + VPN_CONTAINER + "\"" }}
+{%- else %}
+{{ "networks:" | indent(8, true) }}
+{{ "- backend" | indent(10, true) }}
+{{ "- frontend" | indent(10, true) }}
+{{ "dns_search:" | indent(8,true) + SERVICES[service]['subdomains'][0] | indent(30,true) + "." + DOMAIN }}
+{{ "dns:" | indent(8, true) }}
+{%- if not SERVICES[service]['DNS'] %}
+{%- for nameserver in defaults.DNS %}
+{{ "- " | indent(10, true) + nameserver }}
+{%- endfor %}
+{%- else %}
+{%- for nameserver in SERVICES[service]['DNS'] %}
+{{ "- " | indent(10, true) + nameserver }}
+{%- endfor %}
+{%- endif %}
+{%- endif %}
+{#- END NETWORK MODE SETTINGS #}
+
+
+
+{#- RESTART SETTINGS #}
+{{ "restart:" | indent(8,true) + "always" | indent(33,true) }}
+{#- END RESTART SETTINGS #}
+
+
+
+{#- OAUTH PROXY TRAEFIK LABELS #}
+{{ "labels:" | indent(8,true) }}
+{{ "- \"" | indent(10, true) + "traefik.frontend.rule=Host:" + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}
+{{ "- \"" | indent(10, true) + "traefik.frontend.headers.SSLHost=" + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}
+{%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
+{{ "- \"" | indent(10, true) + "traefik.backend=" + VPN_CONTAINER|lower|replace(" ", "-") }}"
+{%- else %}
+{{ "- \"" | indent(10, true) + "traefik.backend=" + service|lower|replace(" ", "-") }}"
+{%- endif %}
+{{ "- \"" | indent(10, true) + "traefik.port=" + OAUTH_PORT }}"
+{{ TRAEFIK_DEFAULTS }}
+{#- END OAUTH PROXY TRAEFIK LABELS #}
+
+
+
+{#- DEPENDS_ON OAUTH_PROXY BLOCK #}
+{{ "depends_on:" | indent(8, true) }}
+{{ "- " | indent(10, true) + service|lower|replace(" ", "-") }}
+{#- END DEPENDS_ON OAUTH_PROXY BLOCK #}
+
+
+{#- OAUTH_PROXY COMMANDS BLOCK #}
+{{ "command:" | indent(8, true) + "|" | indent(32, true) }}
+{{ "-cookie-secure=false" | indent(10, true) }}
+{{ "-upstream=http://" | indent(10, true) + VPN_CONTAINER|lower|replace(" ", "-") + ":" + SERVICES[service]['ports'][0].split(':')[1] }}
+{{ "-authenticated-emails-file=/authenticated-emails.txt" | indent(10, true) }}
+{{ "-email-domain=gmail.com" | indent(10, true) }}
+{{ "-http-address=http://0.0.0.0:" | indent(10, true) + OAUTH_PORT }}
+{{ "-provider=github" | indent(10, true) }}
+{{ "-redirect-url=https://" | indent(10, true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN }}
+{#- END OAUTH_PROXY COMMANDS BLOCK #}
+
+{%- endif %}
+{%- endfor %}   {# END GLOBAL SERVICES BLOCK #}
