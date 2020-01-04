@@ -101,7 +101,6 @@
 {{ service|lower|replace(" ", "-") | indent(4, true) + ":" }}
 {{ "container_name:" | indent(8, true) + service | indent(26, true) }}
 {{ "hostname:" | indent(8, true) + service | lower | replace(" ", "-") | indent(32, true) }}
-{%- endif %}
 {%- endif %}  {# END CONDITIONAL - SERVICE USES VPN #}
 {{ "image:" | indent(8, true) + SERVICES[service]['Image']|indent(35,true) + ":" + SERVICES[service]['tags'] | default('latest') }}
 
@@ -271,24 +270,53 @@
 {#- END CONTAINER LABELS #}
 
 
-
+{#- COMMANDS BLOCK #}
 {%- if 'Commands' in SERVICES[service] and SERVICES[service]['Commands'][0] is defined %}
-        command:        {% for command in SERVICES[service]['Commands'] | sort %}
-{{ "- \"" | indent(10, true) + command }}"{% endfor%}{% endif %}{% if ('depends_on' in SERVICES[service] and SERVICES[service]['depends_on']) or (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
+{{ "command:" | indent(8,true)}}
+{%- for command in SERVICES[service]['Commands'] | sort %}
+{{ "- \"" | indent(10, true) + command }}"
+{%- endfor%}
+{%- endif %}
+{#- END COMMANDS BLOCK #}
+
+
+
+{#- DEPENDENCIES BLOCK #}
+{%- if ('depends_on' in SERVICES[service] and SERVICES[service]['depends_on']) or (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
 {{ "depends_on:" | indent(8,true)}}
 {%- for dependency in SERVICES[service]['depends_on'] %}
-            - {{ dependency }}              {% endfor %} {% if SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn'] %}
-            - {{ VPN_CONTAINER }}  {% endif %} {% endif %} {% if 'healthcheck' in SERVICES[service] and SERVICES[service]['healthcheck'] %}
-        healthcheck:
-            test:       {{ SERVICES[service]['healthcheck']['test'] }}
-            interval:   {{ SERVICES[service]['healthcheck']['interval'] | default(30, true) }}s
-            timeout:    {{ SERVICES[service]['healthcheck']['timeout'] | default(10, true) }}s
-            retries:    {{ SERVICES[service]['healthcheck']['retries'] | default(5, true) }}  {% endif %}{% if 'entrypoint' in SERVICES[service] %}
-        entrypoint:     |
-            bash -c 'bash -s <<EOF  {% for entry in SERVICES[service]["entrypoint"] %}
-                {{ entry }}{% endfor %}
-            EOF'
+{{ "- \"" | indent(10, true) + dependency }}"
+{%- endfor %}
+{%- if SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn'] %}
+{{ "- \"" | indent(10, true) + VPN_CONTAINER + "\"" }}
 {%- endif %}
+{%- endif %}
+{#- END DEPENDENCIES BLOCK #}
+
+
+
+{#- HEALTHCHECK BLOCK #}
+{%- if 'healthcheck' in SERVICES[service] and SERVICES[service]['healthcheck'] %}
+{{ "healthcheck:" | indent(8, true) }}
+{{ "test:" | indent(12,true) + SERVICES[service]['healthcheck']['test'] | indent(36, true) }}
+{{ "interval:" | indent(12,true) + SERVICES[service]['healthcheck']['interval'] | default(30, true) + "s" }}
+{{ "timeout:" | indent(12,true) + SERVICES[service]['healthcheck']['timeout'] | default(30, true) + "s" }}
+{{ "retries:" | indent(12,true) + SERVICES[service]['healthcheck']['retries'] | default(5, true) }}
+{%- endif %}
+{%- if 'entrypoint' in SERVICES[service] %}
+{#- END HEALTHCHECK BLOCK #}
+
+
+
+{#- ENTRYPOINT BLOCK #}
+{{ "entrypoint:" | indent(8, true) + "|" | indent(30, true) }}
+{{ "bash -c 'bash -s <<EOF" | indent(12, true) }}
+{%- for entry in SERVICES[service]["entrypoint"] %}
+{{ entry | indent(16, true) }}
+{%- endfor %}
+{{ "EOF'" | indent(12, true) }}
+{%- endif %}
+{#- END ENTRYPOINT BLOCK #}
 
 
 
