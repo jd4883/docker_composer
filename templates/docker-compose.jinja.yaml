@@ -184,7 +184,7 @@
 {#- ENVIRONMENT VARIABLE FILES #}
 {{ "env_file:" | indent(8, true) }}
 {{ "- globals.env" | indent(10, true) }}
-{{ "- " | indent(10, true) + SERVICE + ".env" }}
+{{ "- " | indent(10, true) + SERVICE|lower + ".env" }}
 {#- END ENVIRONMENT VARIABLE FILES #}
 
 
@@ -210,17 +210,19 @@
 
 
 {#- NETWORK MODE SETTINGS #}
-{%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn'] and SERVICES[service]['subdomains']) %}      {# IF VPN FLAGGED ON #}
-{{ "network_mode:" | indent(8, true) +  "\"service:" | indent(28, true) + VPN_CONTAINER|replace("_", "-") + "\"" }} {% elif SERVICES[service]['subdomains'] is defined %}
+{%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}      {# IF VPN FLAGGED ON #}
+{{ "network_mode:" | indent(8, true) +  "\"service:" | indent(28, true) + VPN_CONTAINER|replace("_", "-") + "\"" }}
+{%- else %}
 {{ "networks:" | indent(8, true) }}
 {{ "- shared-backend" | indent(10, true) }}
 {{ "- backend" | indent(10, true) }}
+{%- endif %}    {# ENDIF VPN FLAGGED ON #}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend']) and not (SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets']) %}    {# IF FRONTEND FLAGGED ON AND OAUTH NOT ENABLED FOR CONTAINER #}
 {{ "- frontend" | indent(10, true) }}
 {%- endif %}    {# END IF FRONTEND FLAGGED ON AND OAUTH NOT ENABLED FOR CONTAINER #}
-{%- elif SERVICES[service]['subdomains'] %}
+{%- if SERVICES[service]['subdomains'] %}
 {{ "dns_search:" | indent(8,true) + SERVICES[service]['subdomains'][0] | indent(30,true) + "." + DOMAIN }}
-{%- endif %}    {# ENDIF VPN FLAGGED ON #}
+{%- endif %}
 {#- END NETWORK MODE SETTINGS #}
 
 
