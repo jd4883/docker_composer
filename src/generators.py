@@ -12,8 +12,13 @@ def gen_docker_yaml(configs, stack, defaults, stack_name):
 	print(f"Creating stack configuration: {configs}/docker-compose.yaml")
 
 def gen_app_specific_env_file(configs, app, environment):
-	print(f"Creating stack configuration: {configs}/{app.lower()}.env")
-	open(Path(f"{configs}/{app.lower()}.env"), "w+").write(load_template('SERVICE_ENV').render(environment = environment))
+	app = app.replace("_", "-")
+	app = app.replace(" ", "-")
+	app = app.lower()
+	print(f"Creating stack configuration: {configs}/{app}.env")
+	open(Path(f"{configs}/{app}.env"), "w+").write(load_template('SERVICE_ENV').render(environment = environment))
+
+ #| lower | replace(" ", "-") | replace("_", "-")
 
 def gen_globals_env_file(configs, defaults):
 	open(Path(str(f"{configs}/globals.env")), "w+").write(load_template('GLOBALS_ENV').render(defaults = defaults))

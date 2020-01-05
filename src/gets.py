@@ -5,7 +5,8 @@ from src.helpers import mkdir
 
 
 def get_index(stack):
-	return str(stack.replace(" ", "_")).lower()
+	stack = str(stack.replace(' ', '-')).lower()
+	return stack.replace('_', '-')
 
 
 def get_stack_file(stack):
@@ -13,7 +14,9 @@ def get_stack_file(stack):
 
 
 def set_config_directory(stack):
-	configs = f"{os.environ['CONFIG']}/{str(stack.replace(' ', '_')).lower()}"
+	stack = str(stack.replace(' ', '-')
+	stack = str(stack).replace('_', "-")
+	configs = f"{os.environ['CONFIG']}/{stack).lower()}"
 	mkdir(configs)
 	print(f"Creating stack configuration: {configs}")
 	return configs
