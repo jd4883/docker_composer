@@ -8,37 +8,30 @@
 {%- set PGID = defaults.PUID|string %}
 {%- set SECRETS = stack.Secrets %}
 {%- set DOMAIN = defaults.Domain|lower|replace(" ", "-") %}
-{#- set VPN_CONTAINER | wordwrap %}{{ stack_name|lower|replace(" ", "-") + "-" + defaults.VPN_CONTAINER|lower|replace(" ", "-") #}
-{%- set VPN_CONTAINER | wordwrap %}{{ defaults.VPN_CONTAINER|lower|replace(" ", "-") }}
+{%- set ORGANIZR_SUBDOMAIN = defaults.iframe|lower|replace(" ", "-") %}
+{%- set VPN_CONTAINER = stack_name|lower|replace(" ", "-") + "-" + defaults.VPN_CONTAINER|lower|replace(" ", "-") %}
+
+
+{%- set TRAEFIK_DEFAULTS %}{{ "- \"" | indent(10, true) + "traefik.enable=true\"" }}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue=sameorigin\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue=allow-from https://" | indent(10,true) + ORGANIZR_SUBDOMAIN + "." + DOMAIN + "\"" }}
+{{ "- \"traefik.frontend.passHostHeader=true\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.STSPreload=true\"" | indent(10,true) }}
+{{ "- \"traefik.protocol=http\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.frameDeny=true\"" | indent(10,true) }}
+{{ "- \"traefik.docker.network=frontend\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.SSLRedirect=true\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.SSLForceHost=true\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.browserXSSFilter=true\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.STSSeconds=315360000\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.contentTypeNosniff=true\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.forceSTSHeader=true\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.customResponseHeaders=X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex,none\"" | indent(10,true) }}
+{{ "- \"traefik.frontend.headers.STSIncludeSubdomains=true\""| indent(10,true) }}
 {%- endset %}
 
-{%- set TRAEFIK_DEFAULTS | wordwrap(width=1000) %}{{ "- \"" | indent(10, true) + "traefik.enable=true" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.protocol=http" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.docker.network=frontend" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.SSLRedirect=true" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.SSLForceHost=true" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.browserXSSFilter=true" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.STSSeconds=315360000" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.contentTypeNosniff=true" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.forceSTSHeader=true" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.customResponseHeaders=X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex" + "\"" }}
-{#- "- \"" | indent(10,true) + "traefik.frontend.headers.customFrameOptionsValue=sameorigin" + "\"" #}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.STSIncludeSubdomains=true" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.STSPreload=true" + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.frameDeny=true" + "\"" }}
-{%- endset %}
-
-
-
-{%- set VERSION_BLOCK | wordwrap %}
 {{- "version:" + "\"" | indent(41,true) + defaults.docker_version | string + "\"" }}
-{%- endset -%}
-{#- END DEFAULT VERSION BLOCK -#}
-
-
-{{- VERSION_BLOCK }}
-{#- GLOBAL NETWORKS BLOCK #}
-{{ "networks:" }}
+{{ "networks:" }}{# GLOBAL NETWORKS BLOCK #}
 {{ "shared-backend:" | indent(4,true) }}
 {{ "external:"  | indent(8,true) + "True" | indent(32,true) }}
 {{ "backend:" | indent(4,true) }}
@@ -192,7 +185,7 @@
 
 {#- CONTAINER VOLUME MAPPINGS #}
 {{ "volumes:" | indent(8, true) }}
-{%- for volume in SERVICES[service]['Volumes'] | sort %}    {# FOR EACH VOLUME DEFINED FOR THE SERVICE #}
+{%- for volume in SERVICES[service]['Volumes'] | sort|default([]) %}    {# FOR EACH VOLUME DEFINED FOR THE SERVICE #}
 {{ "- " | indent(10, true) + volume }}
 {%- endfor %}   {# END FOR EACH VOLUME DEFINED FOR THE SERVICE #}
 {#- END CONTAINER VOLUME MAPPINGS #}
@@ -212,7 +205,7 @@
 
 {#- NETWORK MODE SETTINGS #}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}      {# IF VPN FLAGGED ON #}
-{{ "network_mode:" | indent(8, true) +  "\"service:" | indent(28, true) + stack_name|lower + "-" + VPN_CONTAINER|replace("_", "-") + "\"" }}
+{{ "network_mode:" | indent(8, true) +  "\"service:" | indent(28, true) + VPN_CONTAINER|replace("_", "-") + "\"" }}
 {%- else %}
 {{ "networks:" | indent(8, true) }}
 {{ "- shared-backend" | indent(10, true) }}
@@ -262,14 +255,20 @@
 {{ "- \"" | indent(10,true) + "service.name=" + SERVICE + "\"" }}
 {%- endif %} {# END VPN IN SERVICE NAME #}
 {{ TRAEFIK_DEFAULTS }}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.customFrameOptionsValue='allow-from https:" + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "''\"" }}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue='allow-from https:" | indent(10,true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "'\"" }}
 {%- if SERVICES[service]['HOSTS'] and ',' in SERVICES[service]['HOSTS'] %} {# MULTIPLE HOSTNAMES DEFINED #}
-{{ "- \"" | indent(10,true) + "traefik.frontend.rule=Host: " + SERVICES[service]['HOSTS']|lower + "." + DOMAIN + "\""}}
+{{ "- \"traefik.frontend.rule=Host:" | indent(10,true) + SERVICES[service]['HOSTS']|lower + "." + DOMAIN + "\""}}
 {%- else %} {# ELSE ONE HOSTNAME USED #}
-{{ "- \"" | indent(10,true) + "traefik.frontend.rule=Host:" + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\""}}
+{{ "- \"traefik.frontend.rule=Host:" | indent(10,true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\""}}
 {%- endif %} {# END IF MULTIPLE HOSTNAMES #}
-{{ "- \"" | indent(10,true) + "traefik.frontend.headers.SSLHost=" + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}
-{{ "- \"" | indent(10,true) + "traefik.backend=" + SERVICE + "\"" }}
+{{ "- \"traefik.frontend.headers.SSLHost=" | indent(10,true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}
+{{ "- \"traefik.backend=" | indent(10,true) + SERVICE + "\"" }}
+{%- if SERVICE == "plex" %} {# PORT ASSIGNMENT #}
+{{ "- \"traefik.port=32400\"" | indent(10,true) }}
+{%- elif SERVICES[service]['ports'] and SERVICES[service]['subdomains'] and SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend'] %}
+{{ "- \"traefik.port=" | indent(10,true) + SERVICES[service]['ports'][0].split(':')[1] + "\"" }}
+{%- endif %} {# END PORT ASSIGNMENT #}
+{%- endif %} {# FRONTEND NETWORK DEFINED #}
 
 {%- if SERVICES[service]['labels'] %} {# IF LABELS DEFINED IN SERVICE #}
 {%- for label in SERVICES[service]['labels'] %} {# ITERATE THROUGH LABELS IN SERVICE #}
@@ -277,19 +276,16 @@
 {%- endfor %} {# END ITERATION THROUGH LABELS #}
 {%- endif %} {# END IF LABELS DEFINED IN SERVICES #}
 
-
-{%- endif %} {# FRONTEND NETWORK DEFINED #}
 {%- endif %} {# END IF NO OAUTH PROXY #}
 {#- END CONTAINER LABELS #}
 
 
 {#- COMMANDS BLOCK #}
 {%- if 'Commands' in SERVICES[service] and SERVICES[service]['Commands'][0] is defined %}
-{{ "command:" | indent(8,true)}}
-{%- for command in SERVICES[service]['Commands'] | sort %}
-{{ "- \"" | indent(10, true) + command + "\"" }}
-{%- endfor%}
-{%- endif %}
+{{ "command:" | indent(8,true)}}{% for command in SERVICES[service]['Commands'] | sort %}
+{%- if SERVICES[service]['Commands']|length == 1 %}{{ command | indent(33, true) }}{% else %}
+{{ "- " | indent(10, true) + command }}
+{%- endif %}{% endfor%}{% endif %}
 {#- END COMMANDS BLOCK #}
 
 
@@ -301,7 +297,7 @@
 {{ "- \"" | indent(10, true) + dependency | replace("_", "-") + "\"" }}
 {%- endfor %}
 {%- if SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn'] %}
-{{ "- \"" | indent(10, true) + stack_name + "-" + VPN_CONTAINER | replace("_", "-") + "\"" }}
+{{ "- \"" | indent(10, true) + VPN_CONTAINER | replace("_", "-") + "\"" }}
 {%- endif %}
 {%- endif %}
 {#- END DEPENDENCIES BLOCK #}
@@ -378,7 +374,7 @@
 
 {#- NETWORK MODE SETTINGS #}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
-{{ "network_mode:" | indent(8, true) +  "\"service:" | indent(28, true) + stack_name|lower + "-" + VPN_CONTAINER|replace("_", "-") + "\"" }}
+{{ "network_mode:" | indent(8, true) +  "\"service:" | indent(28, true) + VPN_CONTAINER|lower|replace("_", "-") + "\"" }}
 {%- else %}
 {{ "networks:" | indent(8, true) }}
 {{ "- shared-backend" | indent(10, true) }}
@@ -408,16 +404,16 @@
 
 {#- OAUTH PROXY TRAEFIK LABELS #}
 {{ "labels:" | indent(8,true) }}
-{{ "- \"" | indent(10, true) + "traefik.frontend.rule=Host:" + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}
-{{ "- \"" | indent(10, true) + "traefik.frontend.headers.SSLHost=" + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}
+{{ "- \"traefik.frontend.rule=Host:" | indent(10,true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}
+{{ "- \"traefik.frontend.headers.SSLHost=" | indent(10,true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
-{{ "- \"" | indent(10, true) + "traefik.backend=" + stack_name|lower + "-" + VPN_CONTAINER|replace("_", "-") + "\"" }}
+{{ "- \"traefik.backend=" | indent(10,true) + VPN_CONTAINER|lower|replace("_", "-") + "\"" }}
 {%- else %}
-{{ "- \"" | indent(10, true) + "traefik.backend=" + SERVICE + "\"" }}
+{{ "- \"traefik.backend=" | indent(10,true) + SERVICE + "\"" }}
+{{ "- \"traefik.port=" | indent(10,true) + OAUTH_PORT + "\"" }}
 {%- endif %}
-{{ "- \"" | indent(10, true) + "traefik.port=" + OAUTH_PORT + "\"" }}
 {{ TRAEFIK_DEFAULTS }}
-{#- END OAUTH PROXY TRAEFIK LABELS #}
+{# END OAUTH PROXY TRAEFIK LABELS #}
 
 
 
@@ -428,9 +424,9 @@
 
 {#- OAUTH_PROXY COMMANDS BLOCK #}
 {{ "command:" | indent(8, true) + "|" | indent(32, true) }}
-{{ "-cookie-secure=false" | indent(10, true) }}
+{{ "-cookie-secure=true" | indent(10, true) }}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
-{{ "-upstream=http://" | indent(10, true) + stack_name|lower + "-" + VPN_CONTAINER|replace("_", "-") + ":" + SERVICES[service]['ports'][0].split(':')[1] }}
+{{ "-upstream=http://" | indent(10, true) + VPN_CONTAINER|lower|replace("_", "-") + ":" + SERVICES[service]['ports'][0].split(':')[1] }}
 {%- else %}
 {{ "-upstream=http://" | indent(10, true) + SERVICE + ":" + SERVICES[service]['ports'][0].split(':')[1] }}
 {%- endif %}
@@ -440,7 +436,6 @@
 {{ "-provider=github" | indent(10, true) }}
 {{ "-redirect-url=https://" | indent(10, true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN }}
 {#- END OAUTH_PROXY COMMANDS BLOCK #}
-
 {%- endif %}
 {%- endif %}
 {%- endfor %}   {# END GLOBAL SERVICES BLOCK #}

@@ -43,3 +43,9 @@ def gen_setup_shell_script(stack, app, defaults, globals, configs):
 	                                                                          service = app,
 	                                                                          defaults = defaults,
 	                                                                          globals = globals))
+
+def gen_setup_servers_toml(defaults, servers):
+	servers_toml = f"{os.environ['SERVERS_TOML']}"
+	print(f"Creating stack configuration: {servers_toml}")
+	open(Path(servers_toml), "w+").write(load_template('SERVERS_TOML_TEMPLATE').render(defaults = defaults,
+																					   servers = servers))

@@ -18,7 +18,17 @@ if __name__ == "__main__":
 	globals = config['Globals']
 	defaults = config['Defaults']
 	hostfile = list()
+	for server in config['External Servers']:
+		for sub in config['External Servers'][server]["subdomains"]:
+			hostfile.append(sub)
 	master_stack = dict()
+	for server in config['External Servers']:
+		sublist = list()
+		for sub in config['External Servers'][server]['subdomains']:
+			sub = f"{sub}.{defaults['Domain']}"
+			sublist.append(sub)
+		config['External Servers'][server]['subdomains'] = sublist
+	gen_setup_servers_toml(defaults, config['External Servers'])
 	for stack in config['Stack Group Name']:
 		configs = set_config_directory(stack)
 		services = set_services(config, stack)
