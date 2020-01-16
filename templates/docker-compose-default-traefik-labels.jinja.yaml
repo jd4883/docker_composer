@@ -1,0 +1,43 @@
+{% block TRAEFIK_DEFAULTS %}
+
+{%- set x = SERVICES[service] %}
+
+{%- if x['ports'] and x['subdomains'] and x['networks'] and x['networks']['frontend'] or x['labels'] %}
+{{ "labels:"|indent(8,true) }}
+{%- if x['ports'] and x['subdomains'] and x['networks'] and x['networks']['frontend'] %}
+{%- if 'vpn' in service %}
+{{ "- \""|indent(10,true) + SERVICE) + "-" + "service.name=" + stack_name + "-" + SERVICE) + "\"" }}
+{%- else %}
+
+{{ "- \""|indent(10,true) + "service.name=" + SERVICE) + "\"" }}
+{%- endif %}
+{{ "- \""|indent(10, true) + "traefik.enable=true\"" }}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue=sameorigin\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue=allow-from https://"|indent(10,true) + ORGANIZR_SUBDOMAIN + "." + DOMAIN) + "\"" }}
+{{ "- \"traefik.frontend.passHostHeader=true\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.STSPreload=true\""|indent(10,true) }}
+{{ "- \"traefik.protocol=http\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.frameDeny=true\""|indent(10,true) }}
+{{ "- \"traefik.docker.network=frontend\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.SSLRedirect=true\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.SSLForceHost=true\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.browserXSSFilter=true\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.STSSeconds=315360000\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.contentTypeNosniff=true\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.forceSTSHeader=true\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.customResponseHeaders=X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex,none\""|indent(10,true) }}
+{{ "- \"traefik.frontend.headers.STSIncludeSubdomains=true\""| indent(10,true) }}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue='allow-from https:"|indent(10,true) + x['subdomains'][0] + "." + DOMAIN + "'\"" }}
+{%- if x['HOSTS'] and ',' in x['HOSTS'] %}
+{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + x['HOSTS']|lower + "." + DOMAIN + "\""}}{% else %}
+{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + x['subdomains'][0] + "." + DOMAIN + "\""}}{% endif %}
+{{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + x['subdomains'][0] + "." + DOMAIN + "\"" }}
+{{ "- \"traefik.backend="|indent(10,true) + SERVICE + "\"" }}{% if SERVICE == "plex" %}
+{{ "- \"traefik.port=32400\""|indent(10,true) }}{% elif x['ports'] and x['subdomains'] and x['networks'] and x['networks']['frontend'] %}
+{{ "- \"traefik.port="|indent(10,true) + x['ports'][0].split(':')[1] + "\"" }}{% endif %}{% endif %}
+{% if x['labels'] %}{% for label in x['labels'] %}{{ "- \""|indent(10, true) + label + "\"" }}
+{%- endfor %}
+{%- endif %}
+{%- endif %}
+{{ super() }}
+{% endblock %}

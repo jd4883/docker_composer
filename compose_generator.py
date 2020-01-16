@@ -33,6 +33,7 @@ if __name__ == "__main__":
 		configs = set_config_directory(stack)
 		services = set_services(config, stack)
 		gen_globals_env_file(configs, defaults)
+		networks = dict()
 		for app in services:
 			hosts = list()
 			master_stack[get_index(stack)] = get_stack_file(stack)
