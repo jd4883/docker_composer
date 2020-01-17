@@ -6,7 +6,8 @@ import jinja2
 
 def load_template(environ):
 	template = Path(str(os.environ[environ]))
-	return jinja2.Template(open(template).read())
+	jinja2_template = jinja2.Template(open(template).read())
+	return jinja2_template
 
 
 def mkdir(service_configs):
@@ -15,3 +16,10 @@ def mkdir(service_configs):
 	except FileExistsError:
 		# directory already exists
 		pass
+
+
+def cleanup_name(name):
+	name = name.replace("_", "-")
+	name = name.replace(" ", "-")
+	name = name.lower()
+	return name

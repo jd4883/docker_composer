@@ -15,7 +15,8 @@ def get_stack_file(stack):
 	stack = stack.replace(' ', '-')
 	stack = stack.replace('_', "-")
 	stack = stack.lower()
-	return f"{os.environ['HOST_CONFIGS']}/{stack}/docker-compose.yaml"
+	compose_file_absolute_path = f"{os.environ['HOST_CONFIGS']}/{stack}/docker-compose.yaml"
+	return compose_file_absolute_path
 
 
 def set_config_directory(stack):
