@@ -7,40 +7,35 @@ from src.parser import parse_hostfile
 from src.sets import set_environment, set_services
 from src.helpers import *
 
-def cleanup_name(name):
-	name = name.replace("_", "-")
-	name = name.replace(" ", "-")
-	name = name.lower()
-	return name
-
 if __name__ == "__main__":
-	config = yaml.load(open(Path(str("/parameters.yaml"))), Loader = yaml.FullLoader)
-	globals = config['Globals']
-	defaults = config['Defaults']
+	parameters = open(Path(str("/parameters.yaml")))
+	file = yaml.load(parameters, Loader = yaml.FullLoader)
+	g = file['Globals']
+	defaults = file['Defaults']
 	hostfile = list()
-	for server in config['External Servers']:
-		for sub in config['External Servers'][server]["subdomains"]:
+	for server in file['External Servers']:
+		for sub in file['External Servers'][server]["subdomains"]:
 			hostfile.append(sub)
 	master_stack = dict()
-	for server in config['External Servers']:
+	for server in file['External Servers']:
 		sublist = list()
-		for sub in config['External Servers'][server]['subdomains']:
+		for sub in file['External Servers'][server]['subdomains']:
 			sub = f"{sub}.{defaults['Domain']}"
 			sublist.append(sub)
-		config['External Servers'][server]['subdomains'] = sublist
-	gen_setup_servers_toml(defaults, config['External Servers'])
-	for stack in config['Stack Group Name']:
+		file['External Servers'][server]['subdomains'] = sublist
+	gen_setup_servers_toml(defaults, file['External Servers'])
+	for stack in file['Stack Group Name']:
 		configs = set_config_directory(stack)
-		services = set_services(config, stack)
+		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
 		networks = dict()
 		for app in services:
 			hosts = list()
 			master_stack[get_index(stack)] = get_stack_file(stack)
 			parse_hostfile(services[app], hostfile, hosts, defaults)
-			gen_setup_shell_script(stack, app, defaults, globals, configs)
+			gen_setup_shell_script(stack, app, defaults, g, configs)
 			gen_app_specific_env_file(configs, app, set_environment(services[app]))
 			services[app]['HOSTS'] = ",".join(hosts)
-			gen_docker_yaml(configs, config['Stack Group Name'][stack], defaults, cleanup_name(stack))
-	gen_hostfile(config['Stack Group Name'][stack], defaults, hostfile)
+			gen_docker_yaml(configs, file['Stack Group Name'][stack], defaults, cleanup_name(stack))
+	gen_hostfile(file['Stack Group Name'][stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)

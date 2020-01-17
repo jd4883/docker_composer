@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 def set_environment(app):
-	return app['Environment'] if 'Environment' in app else str()
+	in_app = 'Environment' in app and app['Environment']
+	return app['Environment'] if in_app else str()
 
 
 def set_services(config, stack):

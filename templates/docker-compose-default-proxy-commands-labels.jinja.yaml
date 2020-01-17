@@ -6,7 +6,7 @@
 {%- elif SERVICES[service]['ports']  %}
 {{ "-upstream=http://"|indent(10, true) + SERVICE)|lower|replace("_", "-") + ":80" }}
 {%- endif %}
-{{ "-authenticated-emails-file=/config/authenticated-emails.txt"|indent(10, true) }}
+{{ "-authenticated-emails-file=/file/authenticated-emails.txt"|indent(10, true) }}
 {{ "-email-domain=gmail.com"|indent(10, true) }}
 {{ "-http-address=http://0.0.0.0:"|indent(10, true) + OAUTH_PORT }}
 {{ "-provider=github"|indent(10, true) }}

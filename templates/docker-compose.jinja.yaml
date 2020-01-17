@@ -34,7 +34,7 @@
 {{ "driver:"|indent(8,true) + "host"|indent(34,true) }}{% else%}
 {{ "driver:"|indent(8,true) + "bridge"|indent(34,true) }}
 {{ "ipam:"|indent(8,true) }}
-{{ "config:"|indent(12, true) }}
+{{ "file:"|indent(12, true) }}
 {{ "- subnet:"|indent(14,true) +  BACKEND_SUBNET|indent(26,true) }}{% endif %}
 {{ "frontend:"|indent(4,true) }}
 {{ "external:" |indent(8,true) + "true"|indent(32,true) }}
@@ -83,7 +83,7 @@
 {{ "- "|indent(10, true)+ "\"" + statement + "\"" }}{% endfor %}{% endif %}
 {% if SERVICES[service]["privileged"] %}{{ "privileged:"|indent(8, true) + "true"|indent(30, true) }}{% else %}{{ "user:"|indent(8, true) + "\""|indent(36, true) + PUID|string + ":" + PGID|string + "\"" }}{% endif %}
 {{ "env_file:"|indent(8, true) }}
-{{ "- globals.env"|indent(10, true) }}
+{{ "- g.env"|indent(10, true) }}
 {{ "- "|indent(10, true) + SERVICE + ".env" }}
 {{ "volumes:"|indent(8, true) }}{% for volume in SERVICES[service]['Volumes']|sort|default([]) %}
 {{ "- "|indent(10, true) + volume }}{% endfor %}{% set FINAL_OCTET = (255 - loop.index)|string %}{% if SERVICES[service]['ports'] and not SERVICES[service]['mask_ports'] %}
@@ -141,10 +141,10 @@
 {{ "- "|indent(10, true) + SERVICE + "_proxy_client_secret" }}
 {{ "- "|indent(10, true) + SERVICE + "_proxy_cookie_secret" }}
 {{ "env_file:"|indent(8, true) }}
-{{ "- globals.env"|indent(10, true) }}
+{{ "- g.env"|indent(10, true) }}
 {{ "- "|indent(10, true) + SERVICE + ".env" }}
 {{ "volumes:"|indent(8, true) }}
-{{ "- "|indent(10, true) + "${CONFIGS}/security/authenticated-emails.txt:/config/authenticated-emails.txt:ro" }}
+{{ "- "|indent(10, true) + "${CONFIGS}/security/authenticated-emails.txt:/file/authenticated-emails.txt:ro" }}
 {{ "user:"|indent(8, true) + "\""|indent(36, true) + PUID|string + ":" + PGID|string + "\"" }}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
 {{ "network_mode:"|indent(8, true) +  "\"service:"|indent(28, true) + VPN_CONTAINER|lower|replace("_", "-") + "\"" }}
@@ -185,7 +185,7 @@
 {%- elif SERVICES[service]['networks'] is defined and SERVICES[service]['networks']["frontend"] and not SERVICES[service]['ports'] %}
 {{ "-upstream=http://"|indent(10, true) + SERVICE|replace("_", "-") + ":" + 80 }}
 {%- endif %}
-{{ "-authenticated-emails-file=/config/authenticated-emails.txt"|indent(10, true) }}
+{{ "-authenticated-emails-file=/file/authenticated-emails.txt"|indent(10, true) }}
 {{ "-email-domain=gmail.com"|indent(10, true) }}
 {{ "-http-address=http://0.0.0.0:"|indent(10, true) + OAUTH_PORT }}
 {{ "-provider=github"|indent(10, true) }}
