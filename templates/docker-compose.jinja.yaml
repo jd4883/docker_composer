@@ -1,8 +1,9 @@
-{%- set IP = defaults.ip|default(172.20) %}{% set OCTET = stack.octets[0] %}{% set OAUTH_PORT = defaults.OAUTH_PORT|string %}{% set BACKEND_SUBNET|wordwrap %}{{ IP }}.{{ OCTET }}.0/24{% endset %}
-{%- set SERVICES = stack.Services %}{% set VOLUMES = stack.Volumes %}{% set PUID = defaults.PUID|string %}{% set PGID = defaults.PUID|string %}{% set SECRETS = stack.Secrets %}{% set DOMAIN = defaults.Domain|lower|replace(" ", "-") %}
-{%- set ORGANIZR_SUBDOMAIN = defaults.iframe|lower|replace(" ", "-") %}{% set VPN_CONTAINER = stack_name|lower|replace(" ", "-") + "-" + defaults.VPN_CONTAINER|lower|replace(" ", "-") %}{% set TRAEFIK_DEFAULTS %}{{ "- \""|indent(10, true) + "traefik.enable=true\"" }}
+{%- set SERVICES = stack.Services %}
+{%- set VOLUMES = stack.Volumes %}
+{%- set SECRETS = stack.Secrets %}
+{%- set TRAEFIK_DEFAULTS %}{{ "- \""|indent(10, true) + "traefik.enable=true\"" }}
 {{ "- \"traefik.frontend.headers.customFrameOptionsValue=sameorigin\""|indent(10,true) }}
-{{ "- \"traefik.frontend.headers.customFrameOptionsValue=allow-from https://"|indent(10,true) + ORGANIZR_SUBDOMAIN + "." + DOMAIN + "\"" }}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue=allow-from https://"|indent(10,true) + compose.organizrURL + "\"" }}
 {{ "- \"traefik.frontend.passHostHeader=true\""|indent(10,true) }}
 {{ "- \"traefik.frontend.headers.STSPreload=true\""|indent(10,true) }}
 {{ "- \"traefik.protocol=http\""|indent(10,true) }}
@@ -23,13 +24,8 @@
 {{ "backend:"|indent(4,true) }}
 {{ "driver:"|indent(8,true) + "bridge"|indent(34,true) }}
 {{ "ipam:"|indent(8,true) }}
-<<<<<<< HEAD
-{{ "file:"|indent(12, true) }}
-{{ "- subnet:"|indent(14,true) +  BACKEND_SUBNET|indent(26,true) }}{% endif %}
-=======
-{{ "config:"|indent(12, true) }}
-{{ "- subnet:"|indent(14,true) +  BACKEND_SUBNET|indent(26,true) }}
->>>>>>> master
+{{ "config:"|indent(12,true) }}
+{{ "- subnet:"|indent(14,true) +  compose.backend_subnet|indent(26,true) }}
 {{ "frontend:"|indent(4,true) }}
 {{ "external:" |indent(8,true) + "true"|indent(32,true) }}
 {{ "secrets:" }}
@@ -50,9 +46,9 @@
 {{ volume |indent(4,true) + ":" }}
 {{ "external:"|indent(8, true) + "true"|indent(32, true) }}{% endfor %}{% endif %}
 {{ "services:" }}{% for service in SERVICES|sort %}{% set SERVICE = service|lower|replace("_", "-") %}{% set CONTAINER_VPN = ('vpn' in service) %}{% if CONTAINER_VPN %}
-{{ stack_name|lower|indent(4, true) + "-" + SERVICE + ":" }}
-{{ "container_name:" |indent(8,true) + stack_name|lower|indent(26, true) + "-" +  SERVICE }}
-{{ "hostname:"|indent(8,true) + stack_name|lower|indent(32, true) + "-" + SERVICE }}{% else %}
+{{ compose.stackTitle|indent(4, true) + "-" + SERVICE + ":" }}
+{{ "container_name:" |indent(8,true) + compose.stackTitle|indent(26, true) + "-" +  SERVICE }}
+{{ "hostname:"|indent(8,true) + compose.stackTitle|indent(32, true) + "-" + SERVICE }}{% else %}
 {{ SERVICE|indent(4, true) + ":" }}
 {{ "container_name:"|indent(8, true) + SERVICE|indent(26, true) }}{% if not (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
 {{ "hostname:"|indent(8, true) + SERVICE|indent(32, true) }}{% endif %}{% endif %}
@@ -71,9 +67,9 @@
 {{ "- "|indent(10, true) + cap }}{% endfor %}{% endif %}{% if 'sysctls' in SERVICES[service] %}
 {{ "sysctls:"|indent(8, true) }}{% for statement in SERVICES[service]['sysctls']|sort %}
 {{ "- "|indent(10, true)+ "\"" + statement + "\"" }}{% endfor %}{% endif %}
-{% if SERVICES[service]["privileged"] %}{{ "privileged:"|indent(8, true) + "true"|indent(30, true) }}{% else %}{{ "user:"|indent(8, true) + "\""|indent(36, true) + PUID|string + ":" + PGID|string + "\"" }}{% endif %}
+{% if SERVICES[service]["privileged"] %}{{ "privileged:"|indent(8, true) + "true"|indent(30, true) }}{% else %}{{ "user:"|indent(8, true) + "\""|indent(36, true) + compose.puid + ":" + compose.pgid + "\"" }}{% endif %}
 {{ "env_file:"|indent(8, true) }}
-{{ "- g.env"|indent(10, true) }}
+{{ "- globals.env"|indent(10, true) }}
 {{ "- "|indent(10, true) + SERVICE + ".env" }}
 {{ "volumes:"|indent(8, true) }}{% for volume in SERVICES[service]['Volumes']|sort|default([]) %}
 {{ "- "|indent(10, true) + volume }}{% endfor %}{% set FINAL_OCTET = (255 - loop.index)|string %}{% if SERVICES[service]['ports'] and not SERVICES[service]['mask_ports'] %}
@@ -82,27 +78,27 @@
 {{ "published:"|indent(12, true) + PORT.split(':')[0]|indent(27,true) }}
 {% if "udp" in port %}{{ "protocol:"|indent(12, true) + "udp"|indent(28,true) }}{% else %}{{ "protocol:"|indent(12,true) + "tcp"|indent(28,true) }}{% endif %}
 {{ "mode:"|indent(12, true) + "host"|indent(32,true) }}{% endfor %}{% endif %}
-{% if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}{{ "network_mode:"|indent(8, true) +  "\"service:"|indent(28, true) + VPN_CONTAINER|replace("_", "-") + "\"" }}{% else %}{{ "networks:"|indent(8, true) }}
+{% if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}{{ "network_mode:"|indent(8, true) +  "\"service:"|indent(28, true) + compose.vpnHostName + "\"" }}{% else %}{{ "networks:"|indent(8, true) }}
 {{ "shared-backend:"|indent(12, true) }}
 {{ "backend:"|indent(12, true) }}
-#{{ "ipv4_address:" |indent(16,true)  + IP|string|indent(20,true) + "." + OCTET|string + "." + (255 - loop.index)|string }}
+#{{ "ipv4_address:" |indent(16,true)  + compose.ip + "." + (255 - loop.index)|string }}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend']) and not (SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets']) %}
 {{ "frontend:"|indent(12, true) }}{% endif %}{% if SERVICES[service]['subdomains'] %}
-{{ "dns_search:"|indent(8,true) + SERVICES[service]['subdomains'][0]|indent(30,true) + "." + DOMAIN }}{% if CONTAINER_VPN %}
+{{ "dns_search:"|indent(8,true) + SERVICES[service]['subdomains'][0]|indent(30,true) + "." + compose.domain }}{% if CONTAINER_VPN %}
 {{ "dns:"|indent(8, true) }}
 {% for nameserver in SERVICES[service]['DNS'] %}{{ "- "|indent(10, true) + nameserver }}{% endfor %}{% elif ((SERVICES[service]['networks']) and not (SERVICES[service]['networks']['vpn'])) and not (SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets']) %}
-{{"domainname:"|indent(8, true) + DOMAIN|default("localhost")|indent(30, true) }}
+{{"domainname:"|indent(8, true) + compose.domain|default("localhost")|indent(30, true) }}
 {{ "dns:"|indent(8, true) }}{% if not SERVICES[service]['DNS'] %}{% for nameserver in defaults.DNS %}
 {{ "- "|indent(10, true) + nameserver }}{% endfor %}{% else %}{% for nameserver in SERVICES[service]['DNS'] %}
 {{ "- "|indent(10, true) + nameserver }}{% endfor %}{% endif %}{% endif %}{% if not SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] %}{% endif %}{% if SERVICES[service]['ports'] and SERVICES[service]['subdomains'] and SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend'] or SERVICES[service]['labels'] %}
 {{ "labels:"|indent(8,true) }}{% if SERVICES[service]['ports'] and SERVICES[service]['subdomains'] and SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend'] %}
 {{ TRAEFIK_DEFAULTS }}{% if CONTAINER_VPN %}
-{{ "- \""|indent(10,true) + SERVICE + "-" + "service.name=" + stack_name + "-" + SERVICE + "\"" }}{% else %}
+{{ "- \""|indent(10,true) + SERVICE + "-" + "service.name=" + compose.stackTitle + "-" + SERVICE + "\"" }}{% else %}
 {{ "- \""|indent(10,true) + "service.name=" + SERVICE + "\"" }}{% endif %}
-{{ "- \"traefik.frontend.headers.customFrameOptionsValue='allow-from https:"|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "'\"" }}{% if SERVICES[service]['HOSTS'] and ',' in SERVICES[service]['HOSTS'] %}
-{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICES[service]['HOSTS']|lower + "." + DOMAIN + "\""}}{% else %}
-{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\""}}{%- endif %}
-{{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue='allow-from https:"|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain + "'\"" }}{% if SERVICES[service]['HOSTS'] and ',' in SERVICES[service]['HOSTS'] %}
+{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICES[service]['HOSTS']|lower + "." + compose.domain + "\""}}{% else %}
+{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain + "\""}}{%- endif %}
+{{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain + "\"" }}
 {{ "- \"traefik.backend="|indent(10,true) + SERVICE + "\"" }}{% if SERVICE== "plex" %}
 {{ "- \"traefik.port=32400\""|indent(10,true) }}{% elif PORT_AND_FRONTEND %}
 {{ "- \"traefik.port="|indent(10,true) + SERVICES[service]['ports'][0].split(':')[1] + "\"" }}{% endif %}{% endif %}{% if SERVICES[service]['labels'] %}{% for label in SERVICES[service]['labels'] %}
@@ -113,7 +109,7 @@
 {%- if ('depends_on' in SERVICES[service] and SERVICES[service]['depends_on']) or (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
 {{ "depends_on:"|indent(8,true)}}{% for dependency in SERVICES[service]['depends_on'] %}
 {{ "- \""|indent(10, true) + dependency|replace("_", "-") + "\"" }}{% endfor %}
-{% if SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn'] %}{{ "- \""|indent(10, true) + VPN_CONTAINER|replace("_", "-") + "\"" }}{% endif %}
+{% if SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn'] %}{{ "- \""|indent(10, true) + compose.vpnHostName + "\"" }}{% endif %}
 {%- endif %}{% if 'healthcheck' in SERVICES[service] and SERVICES[service]['healthcheck'] %}
 {{ "healthcheck:"|indent(8, true) }}
 {{ "test:"|indent(12,true) + SERVICES[service]['healthcheck']['test']|indent(36, true) }}
@@ -132,20 +128,20 @@
 {{ "- "|indent(10, true) + SERVICE + "_proxy_client_secret" }}
 {{ "- "|indent(10, true) + SERVICE + "_proxy_cookie_secret" }}
 {{ "env_file:"|indent(8, true) }}
-{{ "- g.env"|indent(10, true) }}
+{{ "- globals.env"|indent(10, true) }}
 {{ "- "|indent(10, true) + SERVICE + ".env" }}
 {{ "volumes:"|indent(8, true) }}
 {{ "- "|indent(10, true) + "${CONFIGS}/security/authenticated-emails.txt:/file/authenticated-emails.txt:ro" }}
-{{ "user:"|indent(8, true) + "\""|indent(36, true) + PUID|string + ":" + PGID|string + "\"" }}
+{{ "user:"|indent(8, true) + "\""|indent(36, true) + compose.puid + ":" + compose.pgid + "\"" }}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
-{{ "network_mode:"|indent(8, true) +  "\"service:"|indent(28, true) + VPN_CONTAINER|lower|replace("_", "-") + "\"" }}
+{{ "network_mode:"|indent(8, true) +  "\"service:"|indent(28, true) + compose.vpnHostName + "\"" }}
 {%- else %}
 {{ "networks:"|indent(8, true) }}
 {{ "shared-backend:"|indent(12,true) }}
 {{ "backend:"|indent(12,true) }}{% set PROXY_FINAL_OCTET = (loop.index + 2)|string %}
-#{{ "ipv4_address:" |indent(16,true)  + IP|string|indent(20,true) + "." + OCTET|string + "." +  PROXY_FINAL_OCTET }}
+#{{ "ipv4_address:" |indent(16,true)  + compose.ip|indent(20,true)  + "." +  PROXY_FINAL_OCTET }}
 {% if SERVICES[service]['subdomains'] is defined %}{{ "frontend:"|indent(12,true) }}{% endif %}{% if SERVICES[service]['subdomains'] is defined %}
-{{ "dns_search:"|indent(8,true) + SERVICES[service]['subdomains'][0]|indent(30,true) + "." + DOMAIN }}
+{{ "dns_search:"|indent(8,true) + SERVICES[service]['subdomains'][0]|indent(30,true) + "." + compose.domain }}
 {{ "dns:"|indent(8, true) }}{% if not SERVICES[service]['DNS'] %}{% endif %}
 {% for nameserver in defaults.DNS %}{{ "- "|indent(10, true) + nameserver }}{% endfor %}{% else %}
 {% for nameserver in SERVICES[service]['DNS'] %}{{ "-"|indent(10, true) + nameserver }}{% endfor %}{% endif %}
@@ -153,34 +149,31 @@
 {{ "depends_on:"|indent(8, true) }}
 {{ "- "|indent(10, true) + SERVICE}}
 {{ "labels:"|indent(8,true) }}{% if SERVICES[service]['subdomains'] is defined %}
-{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICES[service]['subdomains'][0]|lower + "." + DOMAIN + "\"" }}
-{{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN + "\"" }}{% elif PORT_AND_FRONTEND %}
-{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICE + "." + DOMAIN + "\"" }}
-{{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICE + "." + DOMAIN + "\"" }}{% endif %}{% if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
-{{ "- \"traefik.backend="|indent(10,true) + VPN_CONTAINER|lower|replace("_", "-") + "\"" }}{% else %}
+{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICES[service]['subdomains'][0]|lower + "." + compose.domain + "\"" }}
+{{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain + "\"" }}{% elif PORT_AND_FRONTEND %}
+{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICE + "." + compose.domain + "\"" }}
+{{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICE + "." + compose.domain + "\"" }}{% endif %}{% if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
+{{ "- \"traefik.backend="|indent(10,true) + compose.vpnHostName + "\"" }}{% else %}
 {{ "- \"traefik.backend="|indent(10,true) + "proxy_" + SERVICE + "\"" }}
-{{ "- \"traefik.port="|indent(10,true) + OAUTH_PORT + "\"" }}{% endif %}
+{{ "- \"traefik.port="|indent(10,true) + compose.oauth_port + "\"" }}{% endif %}
 {{ TRAEFIK_DEFAULTS }}
 {{ "command:"|indent(8, true) + "|"|indent(32, true) }}
-<<<<<<< HEAD
 {{ "-cookie-secure=false"|indent(10, true) }}
 {%- if SERVICES[service]['networks'] is defined and SERVICES[service]['networks']['vpn'] and SERVICES[service]['ports'] %}
-{{ "-upstream=http://"|indent(10, true) + VPN_CONTAINER|lower|replace("_", "-") + ":" + SERVICES[service]['ports'][0].split(':')[1] }}
+{{ "-upstream=http://"|indent(10, true) + compose.vpnHostName + ":" + SERVICES[service]['ports'][0].split(':')[1] }}
 {%- elif SERVICES[service]['ports']  %}
 {{ "-upstream=http://"|indent(10, true) + SERVICE|replace("_", "-") + ":" + SERVICES[service]['ports'][0].split(':')[1] }}
 {%- elif SERVICES[service]['networks'] is defined and SERVICES[service]['networks']["frontend"] and not SERVICES[service]['ports'] %}
 {{ "-upstream=http://"|indent(10, true) + SERVICE|replace("_", "-") + ":" + 80 }}
 {%- endif %}
 {{ "-authenticated-emails-file=/file/authenticated-emails.txt"|indent(10, true) }}
-=======
 {{ "-cookie-secure=false"|indent(10, true) }}{% if SERVICES[service]['networks'] is defined and SERVICES[service]['networks']['vpn'] and SERVICES[service]['ports'] %}
-{{ "-upstream=http://"|indent(10, true) + VPN_CONTAINER|lower|replace("_", "-") + ":" + SERVICES[service]['ports'][0].split(':')[1] }}{% elif SERVICES[service]['ports']  %}
+{{ "-upstream=http://"|indent(10, true) + compose.vpnHostName + ":" + SERVICES[service]['ports'][0].split(':')[1] }}{% elif SERVICES[service]['ports']  %}
 {{ "-upstream=http://"|indent(10, true) + SERVICE|replace("_", "-") + ":" + SERVICES[service]['ports'][0].split(':')[1] }}{% elif SERVICES[service]['networks'] is defined and SERVICES[service]['networks']["frontend"] and not SERVICES[service]['ports'] %}
 {{ "-upstream=http://"|indent(10, true) + SERVICE|replace("_", "-") + ":" + 80 }}{% endif %}
 {{ "-authenticated-emails-file=/config/authenticated-emails.txt"|indent(10, true) }}
->>>>>>> master
 {{ "-email-domain=gmail.com"|indent(10, true) }}
-{{ "-http-address=http://0.0.0.0:"|indent(10, true) + OAUTH_PORT }}
+{{ "-http-address=http://0.0.0.0:"|indent(10, true) + compose.oauth_port }}
 {{ "-provider=github"|indent(10, true) }}{% if SERVICES[service]['subdomains'] is defined %}
-{{ "-redirect-url=https://"|indent(10, true) + SERVICES[service]['subdomains'][0] + "." + DOMAIN }}{% else %}
-{{ "-redirect-url=https://"|indent(10, true) + SERVICE + "." + DOMAIN }}{% endif %}{% endif %}{% endif %}{% endfor %}
+{{ "-redirect-url=https://"|indent(10, true) + SERVICES[service]['subdomains'][0] + "." + compose.domain }}{% else %}
+{{ "-redirect-url=https://"|indent(10, true) + SERVICE + "." + compose.domain }}{% endif %}{% endif %}{% endif %}{% endfor %}

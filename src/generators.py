@@ -6,11 +6,11 @@ from pathlib import Path
 from src.helpers import load_template
 
 
-def gen_docker_yaml(configs, stack, defaults, stack_name):
+def gen_docker_yaml(configs, stack, defaults, stack_name, composeFile):
 	print(f"Creating stack configuration: {configs}/docker-compose.yaml")
 	f = open(Path(f"{configs}/docker-compose.yaml"), "w+")
 	t = load_template('COMPOSE_YAML')
-	render = t.render(stack = stack, defaults = defaults, stack_name = stack_name)
+	render = t.render(stack = stack, defaults = defaults, stack_name = stack_name, compose = composeFile)
 	f.write(render)
 
 
