@@ -1,13 +1,16 @@
 {%- set DOMAIN = defaults.Domain|lower|replace(" ", "-") %}
 {%- set ORGANIZR_URL = ("https://" + defaults.iframe|lower|replace(" ", "-") + "." + DOMAIN)|string %}
-{{- "[backends]" }}
+{%- set SSL_SKIP_VERIFY = "true" %}
+{{- 'logLevel = "INFO" #DEBUG, INFO, WARN, ERROR, FATAL, PANIC' }}
+defaultEntryPoints = ["websecure", "web"]
+{{ "InsecureSkipVerify =" + SSL_SKIP_VERIFY }}
+{{ "[backends]" }}
 {%- for server in servers|sort %}
 {%- set SERVER = server|lower|replace(" ", "-") %}
 {%- set IP = servers[server]['ip']|default(defaults.hostfiles_ip) %}
 {%- set HOSTNAME = servers[server]["hostname"]|default(IP)|lower|replace(" ", "-") %}
 {%- if servers[server]["port"]|default(443) == "443" or servers[server]["https"] %}{% set SCHEME = "https"|string %}{% else %}{% set SCHEME = "http"|string %}{% endif %}
 {%- set PORT = servers[server]["port"]|default(443) %}
-{%- set SSL_SKIP_VERIFY = (((SCHEME == "https") or ("80" != servers[server]["port"]) )|string|lower) %}
 {%- set BASE_URL = servers[server]["url"]|default(HOSTNAME) %}
 {%- if not  (PORT|string == ("443" or "80" )) %}
 {%- set URL = SCHEME + "://" + BASE_URL + ":" + PORT|string %}
@@ -49,7 +52,6 @@
 {{ "STSPreload = "|indent(12,true) + STS_PRELOAD }}
 {{ "[backends.backend-"|indent(8,true) + SERVER + ".servers]" }}
 {{ "[backends.backend-"|indent(12,true) + SERVER + ".servers" + SERVER + "-ext]" }}
-{{ "InsecureSkipVerify = "|indent(16,true) + SSL_SKIP_VERIFY }}
 {{ "url = "|indent(16,true) + "\"" + URL|replace(":80", "") + "\"" }}
 {{ "weight = "|indent(16,true) + WEIGHT }}
 {%- endfor %}

@@ -3,41 +3,74 @@ class ComposeFile(object):
 	             domain = "example.com",
 	             vpnContainerName = "vpn",
 	             stackTitle = str(),
-	             secrets = list(),
-	             volumes = list(),
-	             services = list(),
-	             ports = list(),
+	             authenticatedEmailsFile = str(),
+	             emailAddress = "email@mydomain.com",
+	             stackDict = dict(),
+	             defaults = dict(),
+	             externalServers = dict(),
+	             globalValues = dict(),
 	             labels = list(),
 	             customResponseHeaders = dict(),
-	             octet1 = str(172),
-	             octet2 = str(20),
-	             octet3 = str(30),
+	             octet1 = str(10),
+	             octet2 = str(23),
 	             subnetMask = str(24),
 	             frontendNetwork = "frontend",
 	             backendNetwork = "backend",
 	             sharedBackendNetwork = "shared-backend",
+	             authenticatedEmailsContainerPath = "/config/authenticated-emails.txt",
 	             traefikProtocol = "http",
 	             organizrSubdomain = "home",
+	             secretsPath = "${SECRETS}",
 	             oauth_port = str(4180),
 	             puid = str(1001),
 	             pgid = str(1001)):
-		self.octet1 = octet1
-		self.octet2 = octet2
-		self.octet3 = octet3
+		self.stackDict = stackDict
+		self.defaults = defaults
+		self.externalServers = externalServers
+		self.globalValues = globalValues
+		self.subnetMask = str(int(self.setItems("subnetMask",
+		                                        self.globalValues,
+		                                        subnetMask)))
+		self.secrets = self.setItems("Secrets",
+		                             self.stackDict)
+		self.volumes = self.setItems("Volumes",
+		                             self.stackDict)
+		self.services = self.setItems("Services",
+		                              self.stackDict)
+		self.domain = str(self.setItems("Domain",
+		                                self.defaults,
+		                                domain))
+		self.email = str(self.setItems("Email",
+		                               self.defaults,
+		                               emailAddress))
+		self.octet1 = str(int(self.setItems("octet1",
+		                                    self.defaults,
+		                                    octet1)))
+		self.octet2 = str(int(self.setItems("octet2",
+		                                    self.defaults,
+		                                    octet2)))
+		self.octet3 = str(int(self.setItems("octets",
+		                                    self.stackDict)[0]))
 		# 4th octet is dynamically calculated for each app
-		self.subnet_mask = subnetMask
-		self.frontendNetwork = frontendNetwork
-		self.backendNetwork = backendNetwork
-		self.sharedBackend = sharedBackendNetwork
+		self.frontendNetwork = self.formatString(self.setItems("Networks",
+		                                                       self.globalValues,
+		                                                       frontendNetwork,
+		                                                       0))
+		self.backendNetwork = self.formatString(self.setItems("Networks",
+		                                                      self.globalValues,
+		                                                      backendNetwork,
+		                                                      1))
+		self.sharedBackend = self.formatString(self.setItems("Networks",
+		                                                     self.globalValues,
+		                                                     sharedBackendNetwork,
+		                                                     2))
 		self.traefikProtocol = traefikProtocol
 		self.oauth_port = oauth_port
-		self.puid = puid
-		self.pgid = pgid
-		self.secrets = secrets
-		self.volumes = volumes
-		self.services = services
-		self.ports = ports
-		self.domain = domain
+		self.puid = str(int(self.setItems("PUID", self.defaults, puid)))
+		self.pgid = str(int(self.setItems("PGID", self.defaults, pgid)))
+		self.secretsPath = str(secretsPath)
+		self.authenticatedEmailsFile = str(authenticatedEmailsFile)
+		self.authenticatedEmailsContainerPath = str(authenticatedEmailsContainerPath)
 		self.stackTitle = self.formatString(stackTitle)
 		self.vpnContainerName = self.formatString(vpnContainerName)
 		self.vpnHostName = self.setVPNHostname()
@@ -51,6 +84,26 @@ class ComposeFile(object):
 		self.customFrameOptionsValue = self.parseCustomFrameOptionsValue()
 		self.traefikLabels = self.setTraefikLabels()
 		self.appendLabelsForTraefik()
+		# conditionals - move to a separate class down the line
+		self.conditionals = list()
+	
+	def setItems(self,
+	             environ,
+	             parentDict = dict(),
+	             payload = list(),
+	             index = None):
+		# CONDITIONALS
+		createParentDictionary = not parentDict
+		subdictionary = environ in parentDict and not index
+		sublist = environ in parentDict and str(index).isdigit() and 'list' in type(parentDict[environ])
+		# TODO: adjust to a master conditional map
+		if createParentDictionary:
+			parentDict = self.defaults
+		if subdictionary:
+			payload = parentDict[environ]
+		elif sublist:
+			payload = parentDict[environ][index]
+		return payload
 	
 	def setVPNHostname(self):
 		return "-".join([self.stackTitle, self.vpnContainerName])
@@ -76,9 +129,9 @@ class ComposeFile(object):
 		payload = payload.replace("_", "-")
 		return payload
 	
-	def parseBackendSubnet(self, networkIP = ".0"):
+	def parseBackendSubnet(self, networkIP = 0):
 		networkIP = networkIP
-		subnetMaskComponents = [self.formatString(self.ip) + networkIP, self.formatString(self.subnet_mask)]
+		subnetMaskComponents = [(str(self.ip) + "." + str(networkIP)), str(self.subnetMask)]
 		payload = self.formatString("/".join(subnetMaskComponents))
 		return payload
 	
