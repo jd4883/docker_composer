@@ -7,11 +7,8 @@
 {{ "- \"traefik.frontend.headers.customFrameOptionsValue=allow-from https://"|indent(10,true) + compose.organizrURL + "\"" }}
 {{ "- \"traefik.frontend.passHostHeader=true\""|indent(10,true) }}
 {{ "- \"traefik.frontend.headers.STSPreload=true\""|indent(10,true) }}
-{{ "- \"traefik.protocol=http\""|indent(10,true) }}
 {{ "- \"traefik.frontend.headers.frameDeny=true\""|indent(10,true) }}
-{%- if service != plex %}
 {{ "- \"traefik.docker.network=frontend\""|indent(10,true) }}
-{%- endif %}
 {{ "- \"traefik.frontend.headers.SSLRedirect=true\""|indent(10,true) }}
 {{ "- \"traefik.frontend.headers.SSLForceHost=true\""|indent(10,true) }}
 {{ "- \"traefik.frontend.headers.browserXSSFilter=true\""|indent(10,true) }}
@@ -135,6 +132,7 @@
 {{ "network_mode:"|indent(8, true) +  "\"service:"|indent(28, true) + compose.vpnHostName + "\"" }}
 {%- else %}
 {{ "networks:"|indent(8, true) }}
+{{ "frontend:"|indent(12, true) }}
 {{ "backend:"|indent(12, true) }}
 {{ "ipv4_address:" |indent(16,true)  + compose.ip|indent(20,true) + "." + FINAL_OCTET }}
 {%- if SERVICES[service]['subdomains'] %}
@@ -168,17 +166,18 @@
 {{ "- \""|indent(10,true) + "service.name=" + SERVICE + "\"" }}
 {%- endif %}
 {{ "- \"traefik.frontend.headers.customFrameOptionsValue='allow-from https:"|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain + "'\"" }}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".protocol=http\"" }}
 {%- if SERVICES[service]['HOSTS'] and ',' in SERVICES[service]['HOSTS'] %}
-{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICES[service]['HOSTS']|lower +  "\""}}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".frontend.rule=Host:" + SERVICES[service]['HOSTS']|lower +  "\""}}
 {%- else %}
-{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICES[service]['subdomains'][0] + "\""}}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".frontend.rule=Host:" + SERVICES[service]['subdomains'][0] + "\""}}
 {%- endif %}
 {{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain + "\"" }}
 {{ "- \"traefik.backend="|indent(10,true) + SERVICE + "\"" }}
 {%- if SERVICE== "plex" %}
-{{ "- \"traefik.port=32400\""|indent(10,true) }}
-{%- elif PORT_AND_FRONTEND %}
-{{ "- \"traefik.port="|indent(10,true) + SERVICES[service]['ports'][0].split(':')[1] + "\"" }}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".port=32400\"" }}
+{%- else %}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".port=" + SERVICES[service]['ports'][0].split(':')[1] + "\"" }}
 {%- endif %}
 {%- endif %}
 {%- if SERVICES[service]['labels'] %}
@@ -255,16 +254,17 @@
 {{ "- "|indent(10, true) + SERVICE}}
 {{ "labels:"|indent(8,true) }}
 {%- if SERVICES[service]['subdomains'] is defined %}
-{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICES[service]['subdomains'][0]|lower + "." + compose.domain + "\"" }}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".frontend.rule=Host:" + SERVICES[service]['subdomains'][0]|lower + "." +
+   compose.domain + "\"" }}
 {{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain + "\"" }}
 {%- elif PORT_AND_FRONTEND %}
-{{ "- \"traefik.frontend.rule=Host:"|indent(10,true) + SERVICE + "." + compose.domain + "\"" }}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".frontend.rule=Host:" + SERVICE + "." + compose.domain + "\"" }}
 {{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICE + "." + compose.domain + "\"" }}
 {%- endif %}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
 {{ "- \"traefik.backend="|indent(10,true) + compose.vpnHostName + "\"" }}{% else %}
-{{ "- \"traefik.backend="|indent(10,true) + "proxy_" + SERVICE + "\"" }}
-{{ "- \"traefik.port="|indent(10,true) + compose.oauth_port + "\"" }}
+{{ "- \"traefik.backend="|indent(10,true) + SERVICE + "-proxy" + "\"" }}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".port=" + compose.oauth_port + "\"" }}
 {%- endif %}
 {{ TRAEFIK_DEFAULTS }}
 {{ "command:"|indent(8, true) + "|"|indent(32, true) }}

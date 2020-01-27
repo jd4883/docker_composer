@@ -1,10 +1,6 @@
 {%- set DOMAIN = defaults.Domain|lower|replace(" ", "-") %}
 {%- set ORGANIZR_URL = ("https://" + defaults.iframe|lower|replace(" ", "-") + "." + DOMAIN)|string %}
-{%- set SSL_SKIP_VERIFY = "true" %}
-{{- 'logLevel = "INFO" #DEBUG, INFO, WARN, ERROR, FATAL, PANIC' }}
-defaultEntryPoints = ["websecure", "web"]
-{{ "InsecureSkipVerify =" + SSL_SKIP_VERIFY }}
-{{ "[backends]" }}
+{{- "[backends]" }}
 {%- for server in servers|sort %}
 {%- set SERVER = server|lower|replace(" ", "-") %}
 {%- set IP = servers[server]['ip']|default(defaults.hostfiles_ip) %}
@@ -12,7 +8,7 @@ defaultEntryPoints = ["websecure", "web"]
 {%- if servers[server]["port"]|default(443) == "443" or servers[server]["https"] %}{% set SCHEME = "https"|string %}{% else %}{% set SCHEME = "http"|string %}{% endif %}
 {%- set PORT = servers[server]["port"]|default(443) %}
 {%- set BASE_URL = servers[server]["url"]|default(HOSTNAME) %}
-{%- if not  (PORT|string == ("443" or "80" )) %}
+{%- if (PORT|string != ("443" or "80" )) %}
 {%- set URL = SCHEME + "://" + BASE_URL + ":" + PORT|string %}
 {%- else %}
 {%- set URL = SCHEME + "://" + BASE_URL %}
@@ -31,29 +27,32 @@ defaultEntryPoints = ["websecure", "web"]
 {%- set CUSTOM_RESPONSE_HEADERS = servers[server]["custom_response_headers"]|default("X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex") %}
 {%- set STS_SUB = (not servers[server]["sts_subdomains"])|lower|default(true) %}
 {%- set STS_PRELOAD = (not servers[server]["sts_preload"])|lower|default(true) %}
-{{ "[backends.backend-"|indent(4,true) + SERVER + "]" }}
-{{ "[backends.backend-"|indent(8,true) + SERVER + ".healthcheck]" }}
-{{ "path = \""|indent(12,true) + HEALTHCHECK_PATH + "\"" }}
-{{ "port = "|indent(12,true) + HEALTHCHECK_PORT|default }}
-{{ "scheme = "|indent(12,true) + "\"http\"" }}
-{{ "hostname = "|indent(12,true) + "\""+ HOSTNAME + "\"" }}
-{{ "[backends.backend-"|indent(8,true) + SERVER + ".headers]" }}
-{{ "SSLRedirect = "|indent(12,true) + SSL_REDIRECT }}
-{{ "SSLForceHost = "|indent(12,true) +  SSL_FORCE_HOST }}
-{{ "customFrameOptionsValue = "|indent(12,true) +  CUSTOM_FRAME_OPTIONS }}
-{{ "frameDeny = "|indent(12,true) +  FRAME_DENY }}
-{{ "customResponseHeaders = \"" | indent(12,true) + CUSTOM_RESPONSE_HEADERS + "\"" }}
-{{ "sslForceHost = "|indent(12,true) + SSL_FORCE_HOST }}
-{{ "browserXSSFilter = "|indent(12,true) + XSS }}
-{{ "STSSeconds = "|indent(12,true) + STS_SEC }}
-{{ "contentTypeNosniff = "|indent(12,true) + NO_SNIFF }}
-{{ "forceSTSHeader = "|indent(12,true) + FORCE_STS }}
-{{ "STSIncludeSubdomains = "|indent(12,true) + STS_SUB }}
-{{ "STSPreload = "|indent(12,true) + STS_PRELOAD }}
-{{ "[backends.backend-"|indent(8,true) + SERVER + ".servers]" }}
-{{ "[backends.backend-"|indent(12,true) + SERVER + ".servers" + SERVER + "-ext]" }}
-{{ "url = "|indent(16,true) + "\"" + URL|replace(":80", "") + "\"" }}
-{{ "weight = "|indent(16,true) + WEIGHT }}
+{{ "[backends."|indent(2,true) + SERVER + "]" }}
+{{ "[backends."|indent(4,true) + SERVER + ".healthcheck]" }}
+{{ "path = \""|indent(6,true) + HEALTHCHECK_PATH + "\"" }}
+{{ "port = "|indent(6,true) + HEALTHCHECK_PORT|default }}
+{{ "scheme = "|indent(6,true) + "\"http\"" }}
+{{ "hostname = "|indent(6,true) + "\""+ HOSTNAME + "\"" }}
+{{ "[backends."|indent(4,true) + SERVER + ".headers]" }}
+{{ "SSLRedirect = "|indent(6,true) + SSL_REDIRECT }}
+{{ "SSLForceHost = "|indent(6,true) +  SSL_FORCE_HOST }}
+{{ "customFrameOptionsValue = "|indent(6,true) +  CUSTOM_FRAME_OPTIONS }}
+{{ "frameDeny = "|indent(6,true) +  FRAME_DENY }}
+{{ "customResponseHeaders = \"" | indent(6,true) + CUSTOM_RESPONSE_HEADERS + "\"" }}
+{{ "sslForceHost = "|indent(6,true) + SSL_FORCE_HOST }}
+{{ "browserXSSFilter = "|indent(6,true) + XSS }}
+{{ "STSSeconds = "|indent(6,true) + STS_SEC }}
+{{ "contentTypeNosniff = "|indent(6,true) + NO_SNIFF }}
+{{ "forceSTSHeader = "|indent(6,true) + FORCE_STS }}
+{{ "STSIncludeSubdomains = "|indent(6,true) + STS_SUB }}
+{{ "STSPreload = "|indent(6,true) + STS_PRELOAD }}
+{{ "[backends."|indent(4,true) + SERVER + ".servers]" }}
+{{ "[backends."|indent(4,true) + SERVER + ".servers.server-" + SERVER + "]" }}
+{{ "url = "|indent(6,true) + "\"" + URL|replace(":80", "") + "\"" }}
+{%- if PORT == 443 %}
+{{ "InsecureSkipVerify = true"|indent(6,true) }}
+{%- endif %}
+{{ "weight = "|indent(6,true) + WEIGHT }}
 {%- endfor %}
 {{ "[frontends]" }}{% for server in servers|sort %}
 {%- set SERVER = server|lower|replace(" ", "-") %}
@@ -74,11 +73,13 @@ defaultEntryPoints = ["websecure", "web"]
 {%- set URL = URL|replace(":443", "") %}
 {%- set SUBS = servers[server]['subdomains']|join(", ") %}
 {%- set PASSHOSTHEADER = (not servers[server]["hostheader"])|lower|default(true) %}
-{{ "[frontends.frontend-"|indent(4,true) + SERVER + "]" }}
-{{ "backend = \"backend-"|indent(8,true) + SERVER + "\"" }}
-{{ "passHostHeader = "|indent(8,true) + PASSHOSTHEADER }}
-{{ "port = " |indent(8,true) + PORT|string }}
-{{ "[frontends.frontend-"|indent(8,true) + SERVER + ".routes]" }}
-{{ "[frontends.frontend-"|indent(12,true) + SERVER + ".routes.routes-" + SERVER + "-ext]" }}
-{{ "rule = \"Host:"|indent(16,true) + SUBS + "\"" }}
+{{ "[frontends."|indent(2,true) + SERVER + "]" }}
+{{ "backend = \""|indent(5,true) + SERVER + "\"" }}
+{{ "passHostHeader = "|indent(5,true) + PASSHOSTHEADER }}
+{%- if PORT != 80 %}
+{{ "port = " |indent(5,true) + PORT|string }}
+{%- endif %}
+{{ "[frontends."|indent(4,true) + SERVER + ".routes]" }}
+{{ "[frontends."|indent(4,true) + SERVER + ".routes.routes-" + SERVER + "]" }}
+{{ "rule = \"Host:"|indent(6,true) + SUBS + "\"" }}
 {%- endfor %}
