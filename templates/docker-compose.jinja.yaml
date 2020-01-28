@@ -78,6 +78,9 @@
 {%- endif %}
 {%- endif %}
 {{ "image:"|indent(8, true) + SERVICES[service]['Image']|indent(35,true) + ":" + SERVICES[service]['tags']|default('latest') }}
+{%- if SERVICES[service]["init"] is defined %}
+{{ "init:"|indent(8, true) + "true"|indent(35,true) }}
+{%- endif %}
 {%- if SERVICES[service]['build'] and SERVICES[service]['build']['args'][0] is defined %}
 {{ "build:"|indent(8, true) + "[]"|indent(29, true) }}
 {%- endif %}
