@@ -3,8 +3,6 @@
 {%- set SECRETS = stack.Secrets %}
 {%- set TRAEFIK_DEFAULTS %}
 {{- "- \""|indent(10, true) + "traefik.enable=true\"" }}
-{{ "- \"traefik.frontend.headers.customFrameOptionsValue=sameorigin\""|indent(10,true) }}
-{{ "- \"traefik.frontend.headers.customFrameOptionsValue=allow-from https://"|indent(10,true) + compose.organizrURL + "\"" }}
 {{ "- \"traefik.frontend.passHostHeader=true\""|indent(10,true) }}
 {{ "- \"traefik.frontend.headers.STSPreload=true\""|indent(10,true) }}
 {{ "- \"traefik.frontend.headers.frameDeny=true\""|indent(10,true) }}
@@ -61,7 +59,6 @@
 {{ "external:"|indent(8, true) + "true"|indent(32, true) }}
 {%- endfor %}
 {%- endif %}
-
 {{ "services:" }}
 {%- for service in SERVICES|sort %}
 {%- set SERVICE = service|lower|replace("_", "-") %}
@@ -159,17 +156,20 @@
 {%- endif %}
 {%- endif %}
 {%- endif %}
-{%- if not SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] %}
 {%- if SERVICES[service]['ports'] and SERVICES[service]['subdomains'] and SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend'] or SERVICES[service]['labels'] %}
 {{ "labels:"|indent(8,true) }}
-{%- if SERVICES[service]['ports'] and SERVICES[service]['subdomains'] and SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend'] %}
+{%- if SERVICES[service]['ports'] and SERVICES[service]['subdomains'] and SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend'] and not SERVICES[service]['OAUTH_PROXY'] and not SERVICES[service]['proxy_secrets'] %}
 {{ TRAEFIK_DEFAULTS }}
 {%- if CONTAINER_VPN %}
 {{ "- \""|indent(10,true) + SERVICE + "-" + "service.name=" + compose.stackTitle + "-" + SERVICE + "\"" }}{% else %}
 {{ "- \""|indent(10,true) + "service.name=" + SERVICE + "\"" }}
 {%- endif %}
-{{ "- \"traefik.frontend.headers.customFrameOptionsValue='allow-from https:"|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain + "'\"" }}
-{{ "- \"traefik."|indent(10,true) + SERVICE + ".protocol=http\"" }}
+{%- if SERVICES[service]['subdomains']  %}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue=sameorigin,"|indent(10,true) + "allow-from https://" + compose.organizrURL + ",allow-from https://" + SERVICES[service]['subdomains'][0] + "." + compose.domain + "\"" }}
+{%- else %}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue=sameorigin,"|indent(10,true) + "allow-from https://" + compose.organizrURL + "\"" }}
+{{ "- \"traefik.frontend.headers.customFrameOptionsValue='allow-from https:" + SERVICES[service]['subdomains'][0] + "." + compose.domain + "'\"" }}
+{%- endif %}
 {%- if SERVICES[service]['HOSTS'] and ',' in SERVICES[service]['HOSTS'] %}
 {{ "- \"traefik."|indent(10,true) + SERVICE + ".frontend.rule=Host:" + SERVICES[service]['HOSTS']|lower +  "\""}}
 {%- else %}
@@ -177,6 +177,11 @@
 {%- endif %}
 {{ "- \"traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain + "\"" }}
 {{ "- \"traefik.backend="|indent(10,true) + SERVICE + "\"" }}
+{%- if service|string == "nextcloud" %}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".protocol=https\"" }}
+{%- else %}
+{{ "- \"traefik."|indent(10,true) + SERVICE + ".protocol=http\"" }}
+{%- endif %}
 {%- if SERVICE== "plex" %}
 {{ "- \"traefik."|indent(10,true) + SERVICE + ".port=32400\"" }}
 {%- else %}
@@ -287,7 +292,6 @@
 {{ "-redirect-url=https://"|indent(10, true) + SERVICES[service]['subdomains'][0] + "." + compose.domain }}
 {%- else %}
 {{ "-redirect-url=https://"|indent(10, true) + SERVICE + "." + compose.domain }}
-{%- endif %}
 {%- endif %}
 {%- endif %}
 {%- endif %}
