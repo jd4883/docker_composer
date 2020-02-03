@@ -1,6 +1,5 @@
 #!/usr/bin/env python3.7
 import yaml
-
 from classes.composeParameters import ComposeFile
 from src.generators import *
 from src.gets import get_index, get_stack_file, set_config_directory
@@ -28,7 +27,13 @@ if __name__ == "__main__":
 	for stack in file['Stack Group Name']:
 		composeFile = ComposeFile(file['Defaults']['Domain'],
 		                          file["Defaults"]["VPN Container"],
-		                          stack)
+		                          stack,
+		                          file["Defaults"]["Email Authentication File"],
+		                          file["Defaults"]["Email"],
+		                          file['Stack Group Name'][stack],
+		                          file['Defaults'],
+		                          file['External Servers'],
+		                          file['Globals'])
 		configs = set_config_directory(stack)
 		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
