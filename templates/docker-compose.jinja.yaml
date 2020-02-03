@@ -1,6 +1,24 @@
+{{- "version:" + compose.globals["version"]|string|indent(41,true) }}
 {%- set SERVICES = stack.Services %}
-{%- set VOLUMES = stack.Volumes %}
-{%- set SECRETS = stack.Secrets %}
+{{ "secrets:" }}
+{%- if compose.globals.secrets is defined %}{% for secret in compose.globals.secrets|sort %}
+{{ secret|indent(4, true) + ":" }}
+{{ "file:"|indent(8, true) + compose.globals.secrets[secret]['file']|indent(36, true) }}
+{%- endfor %}{% endif %}
+{%- if compose.globals.volumes is defined and compose.globals.volumes|length > 0 %}
+{{ "volumes:" }}{% for volume in compose.globals.volumes|sort %}
+{{ volume |indent(4,true) + ":" }}
+{{ "external:"|indent(8, true) + "true"|indent(32, true) }}{% endfor %}{% endif %}
+{{ "networks:" }}{% for network in compose.globals["networks"]|sort %}
+{{ network|indent(4,true) + ":" }}{% if compose.globals["networks"][network]["driver"] is defined %}
+{{ "driver:"|indent(8,true) + compose.globals["networks"][network]["driver"]|string|indent(34,true) }}
+{%- endif %}{% if compose.globals["networks"][network]["ipam"] is defined %}
+{{ "ipam:"|indent(8,true) }}
+{{ "config:"|indent(12,true) }}
+{{ "- subnet:"|indent(14,true) + compose.globals["networks"][network]["ipam"]["config"][0]["subnet"]|indent(26, true) }}
+{%- elif compose.globals["networks"][network]["external"] is defined %}
+{{ "external:" |indent(8,true) + compose.globals["networks"][network]["external"]|string|lower|indent(32,true)|default("true") }}
+{%- endif %}{% endfor %}
 {%- set TRAEFIK_DEFAULTS %}
 {{- "- traefik.enable=true"|indent(10, true) }}
 {{ "- traefik.frontend.passHostHeader=true"|indent(10,true) }}
@@ -16,55 +34,6 @@
 {{ "- traefik.frontend.headers.customResponseHeaders=X-Robots-Tag:noindex,nofollow,nosnippet,noarchive,notranslate,noimageindex,none"|indent(10,true) }}
 {{ "- traefik.frontend.headers.STSIncludeSubdomains=true"| indent(10,true) }}
 {%- endset %}
-{{- "version:" + compose.globals["version"]|string|indent(41,true) }}
-{{ "networks:" }}
-{%- for network in compose.globals["networks"]|sort %}
-{{ network|indent(4,true) + ":" }}
-{%- if compose.globals["networks"][network]["driver"] is defined %}
-{{ "driver:"|indent(8,true) + compose.globals["networks"][network]["driver"]|string|indent(34,true) }}
-{%- endif %}
-{%- if compose.globals["networks"][network]["ipam"] is defined %}
-{{ "ipam:"|indent(8,true) }}
-{{ "config:"|indent(12,true) }}
-{{ "- subnet:"|indent(14,true) + compose.globals["networks"][network]["ipam"]["config"][0]["subnet"]|indent(26, true) }}
-{%- elif compose.globals["networks"][network]["external"] is defined %}
-{{ "external:" |indent(8,true) + compose.globals["networks"][network]["external"]|string|lower|indent(32,true)|default("true") }}
-{%- endif %}
-{%- endfor %}
-{{ "secrets:" }}
-{{ "PUID:"|indent(4,true) }}
-{{ "file: "|indent(8, true) + compose.secretsPath|indent(35,true) + "/PUID.secret" }}
-{{ "PGID:"|indent(4,true) }}
-{{ "file: "|indent(8, true) + compose.secretsPath|indent(35,true) + "/PGID.secret" }}
-{%- for service in SERVICES|sort %}
-{%- set SERVICE = service|lower|replace("_", "-") %}
-{%- set PORT_AND_FRONTEND = (SERVICES[service]['ports'] and SERVICES[service]['subdomains'] and SERVICES[service]['networks'] and SERVICES[service]['networks']['frontend']) is defined %}
-{%- if SERVICES[service].OAUTH_PROXY or SERVICES[service].proxy_secrets %}
-{{ SERVICE|indent(4, true) + "_proxy_client_id:" }}
-{{ "file:"|indent(8, true) + compose.secretsPath|indent(36, true) + "/" + SERVICE + "/OAUTH2_PROXY_CLIENT_ID.secret" }}
-{{ SERVICE|indent(4, true)  + "_proxy_client_secret:" }}
-{{ "file:"|lower|indent(8, true) + compose.secretsPath|indent(36, true) + "/" + SERVICE + "/OAUTH2_PROXY_CLIENT_SECRET.secret" }}
-{{ SERVICE|indent(4, true)  + "_proxy_cookie_secret:" }}
-{{ "file:"|indent(8, true) + compose.secretsPath|indent(36, true) + "/" + SERVICE + "/OAUTH2_PROXY_COOKIE_SECRET.secret" }}
-{%- endif %}
-{%- endfor %}
-{%- if SECRETS is defined %}
-{%- for secret in SECRETS|sort %}
-{{ secret|lower|indent(4, true) }}:
-{%- if service == "elasticsearch" %}
-{{ "file:" |indent(8, true) + compose.secretsPath|indent(36, true) + "/" + secret.split('_')[0]|lower|default(service) + "/" + secret|lower + ".secret" }}
-{%- else %}
-{{ "file:" |indent(8, true) + compose.secretsPath|indent(36, true) + "/" + secret.split('_')[0]|lower|default(service) + "/" + secret|upper + ".secret" }}
-{%- endif %}
-{%- endfor %}
-{%- endif %}
-{%- if VOLUMES is defined and VOLUMES|length > 0 %}
-{{ "volumes:" }}
-{%- for volume in VOLUMES|sort %}
-{{ volume |indent(4,true) + ":" }}
-{{ "external:"|indent(8, true) + "true"|indent(32, true) }}
-{%- endfor %}
-{%- endif %}
 {{ "services:" }}
 {%- for service in SERVICES|sort %}
 {%- set SERVICE = service|lower|replace("_", "-") %}
@@ -87,10 +56,10 @@
 {%- if SERVICES[service]['build'] and SERVICES[service]['build']['args'][0] is defined %}
 {{ "build:"|indent(8, true) + "[]"|indent(29, true) }}
 {%- endif %}
-{%- if SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] or SECRETS %}
+{%- if SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] or compose.globals.secrets %}
 {{ "secrets:"|indent(8, true) }}
-{{ "- PUID"|indent(10, true) }}
-{{ "- PGID"|indent(10, true) }}
+{{ "- puid"|indent(10, true) }}
+{{ "- pgid"|indent(10, true) }}
 {%- if SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] %}
 {{ "- "|indent(10, true) + SERVICE|lower + "_proxy_client_id" }}
 {{ "- "|indent(10, true) + SERVICE|lower + "_proxy_client_secret" }}
@@ -231,9 +200,9 @@
 {{ "container_name:"|indent(8, true) + SERVICE|indent(26,true) + "-proxy" }}
 {{ "image:"|indent(8, true) + "a5huynh/oauth2_proxy:latest"|indent(35,true) }}
 {{ "secrets:"|indent(8, true) }}
-{{ "- "|indent(10, true) + SERVICE + "_proxy_client_id" }}
-{{ "- "|indent(10, true) + SERVICE + "_proxy_client_secret" }}
-{{ "- "|indent(10, true) + SERVICE + "_proxy_cookie_secret" }}
+{{ "- "|indent(10, true) + SERVICE|replace("-", "_") + "_proxy_client_id" }}
+{{ "- "|indent(10, true) + SERVICE|replace("-", "_") + "_proxy_client_secret" }}
+{{ "- "|indent(10, true) + SERVICE|replace("-", "_") + "_proxy_cookie_secret" }}
 {{ "env_file:"|indent(8, true) }}
 {{ "- globals.env"|indent(10, true) }}
 {{ "- "|indent(10, true) + SERVICE + ".env" }}
@@ -263,7 +232,7 @@
 {{ "- "|indent(10, true) + SERVICE}}
 {{ "labels:"|indent(8,true) }}
 {{ "- traefik."|indent(10,true) + SERVICE + ".frontend.rule=Host:" + SERVICES[service]['subdomains'][0]|lower + "." + compose.domain }}
-{{ "- traefik.frontend.headers.customFrameOptionsValue='sameorigin','"|indent(10,true) + "allow-from https://" + compose.organizrURL + ",https://" + SERVICES[service]['subdomains'][0] + "." + compose.domain + "'" }}
+{{ "- traefik.frontend.headers.customFrameOptionsValue='SAMEORIGIN','"|indent(10,true) + "allow-from https://" + compose.organizrURL + ",https://" + SERVICES[service]['subdomains'][0] + "." + compose.domain + "'" }}
 {{ "- traefik.frontend.headers.SSLHost="|indent(10,true) + SERVICES[service]['subdomains'][0] + "." + compose.domain }}
 {%- if (SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn']) %}
 {{ "- traefik.backend="|indent(10,true) + compose.vpnHostName }}{% else %}
