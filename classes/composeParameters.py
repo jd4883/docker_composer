@@ -82,38 +82,31 @@ class ComposeFile(object):
 	             pgid = str(1001),
 	             version = 3.7):
 		self.stackDict = stackDict
-		self.services = setItems(self, "Services", self.stackDict, dict())
 		self.defaults = defaults
 		self.externalServers = externalServers
 		self.globalValues = globalValues
 		self.secretsPath = str(secretsPath)
 		self.secrets = setItems(self, "Secrets", self.stackDict, dict())
-		for service in self.services:
-			# TODO:
-			# will add in support for dynamic secret reading from globals, need to have path support though
-			# also this area would be a lot better if it auto generates the files or integrates with vault
-			
-			# if self.secrets:
-			# 	for secret in self.secrets:
-			# 		if str(service).lower() in str(secret).lower():
-			# 			parsedPath = f"{self.secretsPath}/{service}/{secret.upper()}.secret"
-			# 			self.secrets[secret].update({ "file": parsedPath })
-			self.oauth_enabled = "OAUTH_PROXY" in self.services[service] and self.services[service]["OAUTH_PROXY"]
-			self.proxy_secrets_enabled = "proxy_secrets" in self.services[service] and self.services[service]["proxy_secrets"]
-			service = formatString(self, service)
-			if self.oauth_enabled or self.proxy_secrets_enabled:
-				base = f"{self.secretsPath}/{service}"
-				proxy_client_id_file = f"{base}/OAUTH2_PROXY_CLIENT_ID.secret"
-				self.secrets.update({f"{service.replace('-','_')}_proxy_client_id":{"file": proxy_client_id_file}})
-				proxy_client_secret_file = f"{base}/OAUTH2_PROXY_CLIENT_ID.secret"
-				self.secrets.update({f"{service.replace('-','_')}_proxy_client_secret":{"file": proxy_client_secret_file}})
-				proxy_cookie_secret_file = f"{base}/OAUTH2_PROXY_CLIENT_ID.secret"
-				self.secrets.update({f"{service.replace('-','_')}_proxy_cookie_secret":{"file": proxy_cookie_secret_file}})
-		parsedPath = f"{self.secretsPath}/{'PUID'.upper()}.secret"
-		self.secrets.update({'puid':{ "file": parsedPath }})
-		parsedPath = f"{self.secretsPath}/{'PGID'.upper()}.secret"
-		self.secrets.update({'pgid':{ "file": parsedPath }})
+		self.oauth_enabled = bool()
+		self.proxy_secrets_enabled = bool()
+		self.services = dict()
+		for k, v in setItems(self, "Services", self.stackDict, dict()).items():
+			k = formatString(self, k)
+			self.services.update({ k: dict() })
+			if (("networks" in k) and ("vpn" in k["networks"]) and (k["networks"]["vpn"])):
+				self.services.update({ "network_mode": str() })
+			else:
+				self.services[k].update({ "hostname": k })
+			# add conditional change to not be in place if network mode is toggled
+			self.services[k].update({ "container_name": k })
+			self.services[k].update({ "labels": list().append(f"{k}.oauth.backend={self.setOauthProxyFlags(k, v)}") })
 		
+		# plan is to use labels as a reference point instead of recalculating
+			# oauth.frontend will be for the oauth container which will be a class object
+		parsedPath = f"{self.secretsPath}/{'PUID'.upper()}.secret"
+		self.secrets.update({ 'puid': { "file": parsedPath } })
+		parsedPath = f"{self.secretsPath}/{'PGID'.upper()}.secret"
+		self.secrets.update({ 'pgid': { "file": parsedPath } })
 		
 		self.ip = str(IP(self.defaults, self.globalValues, self.stackDict).address)
 		self.globals = {
@@ -121,7 +114,7 @@ class ComposeFile(object):
 				"secrets":  self.secrets,
 				"volumes":  setItems(self, "Volumes", self.stackDict),
 				"version":  f'"{version}"',
-				"services": dict()
+				"services": self.services
 				}
 		self.globals.update(IP(self.defaults, self.globalValues, self.stackDict).networks)
 		
@@ -157,6 +150,18 @@ class ComposeFile(object):
 		self.vpnHostName = self.setVPNHostname()
 		# conditionals - move to a separate class down the line
 		self.conditionals = list()
+	
+	def setOauthProxyFlags(self, name, service):
+		oauth_enabled = "OAUTH_PROXY" in service and service["OAUTH_PROXY"]
+		proxy_secrets_enabled = "proxy_secrets" in service and service["proxy_secrets"]
+		if oauth_enabled or proxy_secrets_enabled:
+			name = name.replace('-', '_')
+			base = f"{self.secretsPath}/{name}/OAUTH2_PROXY_"
+			self.secrets.update({ f"{name}_proxy_client_id": { "file": f"{base}CLIENT_ID.secret" } })
+			self.secrets.update({ f"{name}_proxy_client_secret": { "file": f"{base}CLIENT_SECRET.secret" } })
+			self.secrets.update({ f"{name}_proxy_cookie_secret": { "file": f"{base}COOKIE_SECRET.secret" } })
+			return bool(True)
+		return bool()
 	
 	def setVPNHostname(self):
 		return "-".join([self.stackTitle, self.vpnContainerName])
