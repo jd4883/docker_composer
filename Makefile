@@ -1,5 +1,5 @@
 IMAGE_NAME := docker_composer
-VERSION := latest
+VERSION := v2
 REGISTRY_ADDR := jb6magic
 
 push: tag

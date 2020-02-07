@@ -1,3 +1,26 @@
+from src.formatting import formatString
+from src.sets import setItems
+
+
+class Traefik(object):
+	def __init__(self,
+	             globalValues = dict(),
+	             domain = "example.com",
+	             emailAddress = "email@mydomain.com",
+	             frontendNetwork = "frontend",
+	             backendNetwork = "backend"):
+		self.frontendNetwork = formatString(self, setItems(self,
+		                                                   "Networks",
+		                                                   globalValues,
+		                                                   frontendNetwork,
+		                                                   0))
+		self.backendNetwork = formatString(self, setItems(self,
+		                                                  "Networks",
+		                                                  globalValues,
+		                                                  backendNetwork,
+		                                                  1))
+
+
 class IP(object):
 	def __init__(self,
 	             defaults = dict(),
@@ -50,8 +73,6 @@ class ComposeFile(object):
 	             globalValues = dict(),
 	             labels = list(),
 	             customResponseHeaders = dict(),
-	             frontendNetwork = "frontend",
-	             backendNetwork = "backend",
 	             authenticatedEmailsContainerPath = "/config/authenticated-emails.txt",
 	             traefikProtocol = "http",
 	             organizrSubdomain = "home",
@@ -59,63 +80,122 @@ class ComposeFile(object):
 	             oauth_port = str(4180),
 	             puid = str(1001),
 	             pgid = str(1001),
-	             version = 3.8):
+	             version = 3.7):
 		self.stackDict = stackDict
 		self.defaults = defaults
 		self.externalServers = externalServers
 		self.globalValues = globalValues
-		self.secrets = setItems(self, "Secrets",
-		                        self.stackDict)
-		self.volumes = setItems(self, "Volumes",
-		                        self.stackDict)
-		self.services = setItems(self, "Services",
-		                         self.stackDict)
+		self.secretsPath = str(secretsPath)
+		self.secrets = setItems(self, "Secrets", self.stackDict, dict())
+		self.oauth_enabled = bool()
+		self.proxy_secrets_enabled = bool()
+		self.services = dict()
+		parsedPath = f"{self.secretsPath}/{'PUID'.upper()}.secret"
+		self.secrets.update({ 'puid': { "file": parsedPath } })
+		parsedPath = f"{self.secretsPath}/{'PGID'.upper()}.secret"
+		self.secrets.update({ 'pgid': { "file": parsedPath } })
+		self.local_secrets = list(self.secrets.keys())
+		for k, v in setItems(self, "Services", self.stackDict, dict()).items():
+			k = formatString(self, k)
+			self.services.update({ k: dict() })
+			if (("networks" in k) and ("vpn" in k["networks"]) and (k["networks"]["vpn"])):
+				self.services.update({ "network_mode": str() })
+			else:
+				self.services[k].update(self.getServiceHostname(k))
+			if "secrets" in v:
+				for secret in v["secrets"]:
+					self.local_secrets.append(secret)
+			# add conditional change to not be in place if network mode is toggled
+			payload = { "secrets": self.local_secrets }
+			v.update(payload)
+			self.services[k].update(payload)
+			self.services[k].update(self.getServiceLabels(k, v))
+			self.services[k].update(self.getContainerName(k))
+			tag = "latest"
+			if "tags" in v:
+				tag = str(v["tags"])
+			self.local_secrets = list(self.secrets.keys())
+			# image = { "image": f"{v['image']}:{tag}" }
+			# self.services[k].update({"image": str()})
+			
+		
+		# plan is to use labels as a reference point instead of recalculating
+		# oauth.frontend will be for the oauth container which will be a class object
+		
+		self.ip = str(IP(self.defaults, self.globalValues, self.stackDict).address)
+		self.globals = {
+				"networks": IP(self.defaults, self.globalValues, self.stackDict).networks,
+				"secrets":  self.secrets,
+				"volumes":  setItems(self, "Volumes", self.stackDict),
+				"version":  f'"{version}"',
+				"services": self.services
+				}
+		self.globals.update(IP(self.defaults, self.globalValues, self.stackDict).networks)
+		
 		self.domain = str(setItems(self, "Domain",
 		                           self.defaults,
 		                           domain))
 		self.email = str(setItems(self, "Email",
 		                          self.defaults,
 		                          emailAddress))
-		self.frontendNetwork = formatString(self, setItems(self, "Networks",
-		                                                   self.globalValues,
-		                                                   frontendNetwork,
-		                                                   0))
-		self.backendNetwork = formatString(self, setItems(self, "Networks",
-		                                                  self.globalValues,
-		                                                  backendNetwork,
-		                                                  1))
+		self.traefikLabels = Traefik(self.globalValues, self.domain, self.email)
+		# traefik
 		self.traefikProtocol = traefikProtocol
-		self.globals = {
-				"networks": dict(),
-				"secrets":  dict(),
-				"volumes":  dict(),
-				"version":  f'"{version}"'
-				}
 		self.oauth_port = oauth_port
-		self.puid = str(int(setItems(self, "PUID", self.defaults, puid)))
-		self.pgid = str(int(setItems(self, "PGID", self.defaults, pgid)))
-		self.secretsPath = str(secretsPath)
 		self.authenticatedEmailsFile = str(authenticatedEmailsFile)
-		self.authenticatedEmailsContainerPath = str(authenticatedEmailsContainerPath)
 		self.stackTitle = formatString(self, stackTitle)
-		self.vpnContainerName = formatString(self, vpnContainerName)
-		self.vpnHostName = self.setVPNHostname()
+		
 		self.organizrSubdomain = formatString(self, organizrSubdomain)
 		self.labels = labels
 		self.customResponseHeaders = self.setCustomResponseHeader(customResponseHeaders)
-		self.ip = str(IP(self.defaults, self.globalValues, self.stackDict).address)
 		self.backend_subnet = str(IP(self.defaults, self.globalValues, self.stackDict).backendSubnet)
-		self.globals.update(IP(self.defaults, self.globalValues, self.stackDict).networks)
 		self.organizrURL = self.parseOrganizrFQDN()
 		self.customResponseHeadersValue = self.parseCustomResponseHeader()
 		self.customFrameOptionsValue = self.parseCustomFrameOptionsValue()
 		self.traefikLabels = self.setTraefikLabels()
 		self.appendLabelsForTraefik()
+		
+		self.puid = str(int(setItems(self, "PUID", self.defaults, puid)))
+		self.pgid = str(int(setItems(self, "PGID", self.defaults, pgid)))
+		self.authenticatedEmailsFile = str(authenticatedEmailsFile)
+		self.authenticatedEmailsContainerPath = str(authenticatedEmailsContainerPath)
+		self.stackTitle = formatString(self, stackTitle)
+		self.vpnContainerName = formatString(self, vpnContainerName)
+		self.vpnHostName = self.setVPNHostname()
 		# conditionals - move to a separate class down the line
 		self.conditionals = list()
 	
+	def getServiceHostname(self, k):
+		payload = { "hostname": k }
+		return payload
+	
+	def getContainerName(self, k):
+		payload = { "container_name": k }
+		return payload
+	
+	def getServiceLabels(self, k, v):
+		payload = { "labels": list().append(f"{k}.oauth.backend={self.setOauthProxyFlags(k, v)}") }
+		return payload
+	
+	def setOauthProxyFlags(self, name, service):
+		oauth_enabled = "OAUTH_PROXY" in service and service["OAUTH_PROXY"]
+		proxy_secrets_enabled = "proxy_secrets" in service and service["proxy_secrets"]
+		if oauth_enabled or proxy_secrets_enabled:
+			base = f"{self.secretsPath}/{name}/OAUTH2_PROXY_"
+			# adds to global secrets
+			self.secrets.update({ f"{name}_proxy_client_id": { "file": f"{base}CLIENT_ID.secret" } })
+			self.secrets.update({ f"{name}_proxy_client_secret": { "file": f"{base}CLIENT_SECRET.secret" } })
+			self.secrets.update({ f"{name}_proxy_cookie_secret": { "file": f"{base}COOKIE_SECRET.secret" } })
+			# secrets per service
+			self.local_secrets.append(f"{name}_proxy_client_id")
+			self.local_secrets.append(f"{name}_proxy_client_secret")
+			self.local_secrets.append(f"{name}_proxy_cookie_secret")
+			return bool(True)
+		return bool()
+	
 	def setVPNHostname(self):
-		return "-".join([self.stackTitle, self.vpnContainerName])
+		payload = "-".join([self.stackTitle, self.vpnContainerName])
+		return payload
 	
 	def parseOrganizrFQDN(self):
 		domainComponentList = [self.organizrSubdomain, self.domain]
@@ -124,7 +204,7 @@ class ComposeFile(object):
 		return payload
 	
 	def setCustomResponseHeader(self, customResponseHeaders):
-		customResponseHeaders.update({
+		payload = {
 				"X-Robots-Tag": ["noindex",
 				                 "nofollow",
 				                 "nosnippet",
@@ -132,7 +212,8 @@ class ComposeFile(object):
 				                 "notranslate",
 				                 "noimageindex",
 				                 "none"]
-				})
+				}
+		customResponseHeaders.update(payload)
 		return customResponseHeaders
 	
 	def appendLabelsForTraefik(self):
@@ -145,7 +226,7 @@ class ComposeFile(object):
 		           { "traefik.frontend.headers.STSPreload": bool(True) },
 		           { "traefik.protocol": self.traefikProtocol },
 		           { "traefik.frontend.headers.frameDeny": bool(True) },
-		           { "traefik.docker.network": self.frontendNetwork },
+		           { "traefik.docker.network": self.traefikLabels.frontendNetwork },
 		           { "traefik.frontend.headers.SSLRedirect": bool(True) },
 		           { "traefik.frontend.headers.SSLForceHost": bool(True) },
 		           { "traefik.frontend.headers.browserXSSFilter": bool(True) },
@@ -156,9 +237,15 @@ class ComposeFile(object):
 		           { "traefik.frontend.headers.STSIncludeSubdomains": bool(True) }]
 		return payload
 	
-	def parseCustomFrameOptionsValue(self, items = ["sameorigin"]):
-		items.append(f"allow-from https://{self.organizrURL}")
-		payload = ",".join(items)
+	def parseCustomFrameOptionsValue(self, items = ["SAMEORIGIN"]):
+		# urls = list()
+		# urls.append(f"https://{self.organizrURL}")
+		urls = f"https://{self.organizrURL}"
+		# urls.append(f"https://{self.organizrURL}")
+		# allowFrom = f"'allow-from {str(','.join(urls))}'"
+		payload = f"'SAMEORIGIN','allow-from https://{self.organizrURL}'"
+		# items.append(f"{allowFrom}")
+		# payload = ",".join(items)
 		return payload
 	
 	def parseCustomResponseHeader(self):
@@ -168,29 +255,3 @@ class ComposeFile(object):
 			headerList.append(f"{k}: {value}")
 		payload = formatString(self, ",".join(headerList))
 		return payload
-
-
-def formatString(self, payload):
-	payload = str(payload).lower()
-	payload = payload.replace(" ", "-")
-	payload = payload.replace("_", "-")
-	return payload
-
-
-def setItems(self,
-             environ,
-             parentDict = dict(),
-             payload = list(),
-             index = None):
-	# CONDITIONALS
-	createParentDictionary = not parentDict
-	subdictionary = environ in parentDict and not index
-	sublist = environ in parentDict and str(index).isdigit() and 'list' in type(parentDict[environ])
-	# TODO: adjust to a master conditional map
-	if createParentDictionary:
-		parentDict = self.defaults
-	if subdictionary:
-		payload = parentDict[environ]
-	elif sublist:
-		payload = parentDict[environ][index]
-	return payload
