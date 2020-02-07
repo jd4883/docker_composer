@@ -46,5 +46,5 @@ if __name__ == "__main__":
 			gen_app_specific_env_file(configs, app, set_environment(services[app]))
 			services[app]['HOSTS'] = ",".join(hosts)
 			gen_docker_yaml(configs, file['Stack Group Name'][stack], defaults, cleanup_name(stack), composeFile)
-	gen_hostfile(file['Stack Group Name'][stack], defaults, hostfile)
-	gen_master_stack_file(master_stack)
+		gen_hostfile(file['Stack Group Name'][stack], defaults, hostfile)
+		gen_master_stack_file(master_stack)
