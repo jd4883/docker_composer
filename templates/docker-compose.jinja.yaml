@@ -1,10 +1,10 @@
 {{- "version:" + compose.globals["version"]|string|indent(41,true) }}
 {%- set SERVICES = stack.Services %}
 {{ "secrets:" }}
-{%- if compose.globals.secrets is defined %}{% for secret in compose.globals.secrets|sort %}
+{%- for secret in (compose.globals.secrets)|list|sort %}
 {{ secret|indent(4, true) + ":" }}
 {{ "file:"|indent(8, true) + compose.globals.secrets[secret]['file']|indent(36, true) }}
-{%- endfor %}{% endif %}
+{%- endfor %}
 {%- if compose.globals.volumes is defined and compose.globals.volumes|length > 0 %}
 {{ "volumes:" }}{% for volume in compose.globals.volumes|sort %}
 {{ volume |indent(4,true) + ":" }}
@@ -56,19 +56,10 @@
 {%- if SERVICES[service]['build'] and SERVICES[service]['build']['args'][0] is defined %}
 {{ "build:"|indent(8, true) + "[]"|indent(29, true) }}
 {%- endif %}
-{%- if SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] or compose.globals.secrets %}
 {{ "secrets:"|indent(8, true) }}
-{{ "- puid"|indent(10, true) }}
-{{ "- pgid"|indent(10, true) }}
-{%- if SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets'] %}
-{{ "- "|indent(10, true) + SERVICE|lower + "_proxy_client_id" }}
-{{ "- "|indent(10, true) + SERVICE|lower + "_proxy_client_secret" }}
-{{ "- "|indent(10, true) + SERVICE|lower + "_proxy_cookie_secret" }}
-{%- endif %}
-{%- for key in SERVICES[service]['secrets']|sort %}
-{{ "- "|indent(10, true) + key }}
+{%- for secret in SERVICES[service]["secrets"]|sort %}
+{{ "- "|indent(10, true) + secret }}
 {%- endfor %}
-{%- endif %}
 {%- if SERVICES[service]['cap_add'] %}
 {{ "cap_add:"|indent(8, true) }}{% for cap in SERVICES[service]['cap_add'] %}
 {{ "- "|indent(10, true) + cap }}
@@ -194,15 +185,14 @@
 {{ entry|indent(16, true) }}{% endfor %}
 {{ "EOF'"|indent(12, true) }}
 {%- endif %}
-
 {%- if ((SERVICES[service]['OAUTH_PROXY'] or SERVICES[service]['proxy_secrets']) is defined) %}
 {{ SERVICE|indent(4,true) + "-proxy:" }}
 {{ "container_name:"|indent(8, true) + SERVICE|indent(26,true) + "-proxy" }}
 {{ "image:"|indent(8, true) + "a5huynh/oauth2_proxy:latest"|indent(35,true) }}
 {{ "secrets:"|indent(8, true) }}
-{{ "- "|indent(10, true) + SERVICE|replace("-", "_") + "_proxy_client_id" }}
-{{ "- "|indent(10, true) + SERVICE|replace("-", "_") + "_proxy_client_secret" }}
-{{ "- "|indent(10, true) + SERVICE|replace("-", "_") + "_proxy_cookie_secret" }}
+{%- for secret in SERVICES[service]["secrets"]|sort %}
+{{ "- "|indent(10, true) + secret }}
+{%- endfor %}
 {{ "env_file:"|indent(8, true) }}
 {{ "- globals.env"|indent(10, true) }}
 {{ "- "|indent(10, true) + SERVICE + ".env" }}

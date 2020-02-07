@@ -90,23 +90,37 @@ class ComposeFile(object):
 		self.oauth_enabled = bool()
 		self.proxy_secrets_enabled = bool()
 		self.services = dict()
+		parsedPath = f"{self.secretsPath}/{'PUID'.upper()}.secret"
+		self.secrets.update({ 'puid': { "file": parsedPath } })
+		parsedPath = f"{self.secretsPath}/{'PGID'.upper()}.secret"
+		self.secrets.update({ 'pgid': { "file": parsedPath } })
+		self.local_secrets = list(self.secrets.keys())
 		for k, v in setItems(self, "Services", self.stackDict, dict()).items():
 			k = formatString(self, k)
 			self.services.update({ k: dict() })
 			if (("networks" in k) and ("vpn" in k["networks"]) and (k["networks"]["vpn"])):
 				self.services.update({ "network_mode": str() })
 			else:
-				self.services[k].update({ "hostname": k })
+				self.services[k].update(self.getServiceHostname(k))
+			if "secrets" in v:
+				for secret in v["secrets"]:
+					self.local_secrets.append(secret)
 			# add conditional change to not be in place if network mode is toggled
-			self.services[k].update({ "container_name": k })
-			self.services[k].update({ "labels": list().append(f"{k}.oauth.backend={self.setOauthProxyFlags(k, v)}") })
+			payload = { "secrets": self.local_secrets }
+			v.update(payload)
+			self.services[k].update(payload)
+			self.services[k].update(self.getServiceLabels(k, v))
+			self.services[k].update(self.getContainerName(k))
+			tag = "latest"
+			if "tags" in v:
+				tag = str(v["tags"])
+			self.local_secrets = list(self.secrets.keys())
+			# image = { "image": f"{v['image']}:{tag}" }
+			# self.services[k].update({"image": str()})
+			
 		
 		# plan is to use labels as a reference point instead of recalculating
-			# oauth.frontend will be for the oauth container which will be a class object
-		parsedPath = f"{self.secretsPath}/{'PUID'.upper()}.secret"
-		self.secrets.update({ 'puid': { "file": parsedPath } })
-		parsedPath = f"{self.secretsPath}/{'PGID'.upper()}.secret"
-		self.secrets.update({ 'pgid': { "file": parsedPath } })
+		# oauth.frontend will be for the oauth container which will be a class object
 		
 		self.ip = str(IP(self.defaults, self.globalValues, self.stackDict).address)
 		self.globals = {
@@ -151,20 +165,37 @@ class ComposeFile(object):
 		# conditionals - move to a separate class down the line
 		self.conditionals = list()
 	
+	def getServiceHostname(self, k):
+		payload = { "hostname": k }
+		return payload
+	
+	def getContainerName(self, k):
+		payload = { "container_name": k }
+		return payload
+	
+	def getServiceLabels(self, k, v):
+		payload = { "labels": list().append(f"{k}.oauth.backend={self.setOauthProxyFlags(k, v)}") }
+		return payload
+	
 	def setOauthProxyFlags(self, name, service):
 		oauth_enabled = "OAUTH_PROXY" in service and service["OAUTH_PROXY"]
 		proxy_secrets_enabled = "proxy_secrets" in service and service["proxy_secrets"]
 		if oauth_enabled or proxy_secrets_enabled:
-			name = name.replace('-', '_')
 			base = f"{self.secretsPath}/{name}/OAUTH2_PROXY_"
+			# adds to global secrets
 			self.secrets.update({ f"{name}_proxy_client_id": { "file": f"{base}CLIENT_ID.secret" } })
 			self.secrets.update({ f"{name}_proxy_client_secret": { "file": f"{base}CLIENT_SECRET.secret" } })
 			self.secrets.update({ f"{name}_proxy_cookie_secret": { "file": f"{base}COOKIE_SECRET.secret" } })
+			# secrets per service
+			self.local_secrets.append(f"{name}_proxy_client_id")
+			self.local_secrets.append(f"{name}_proxy_client_secret")
+			self.local_secrets.append(f"{name}_proxy_cookie_secret")
 			return bool(True)
 		return bool()
 	
 	def setVPNHostname(self):
-		return "-".join([self.stackTitle, self.vpnContainerName])
+		payload = "-".join([self.stackTitle, self.vpnContainerName])
+		return payload
 	
 	def parseOrganizrFQDN(self):
 		domainComponentList = [self.organizrSubdomain, self.domain]
@@ -173,7 +204,7 @@ class ComposeFile(object):
 		return payload
 	
 	def setCustomResponseHeader(self, customResponseHeaders):
-		customResponseHeaders.update({
+		payload = {
 				"X-Robots-Tag": ["noindex",
 				                 "nofollow",
 				                 "nosnippet",
@@ -181,7 +212,8 @@ class ComposeFile(object):
 				                 "notranslate",
 				                 "noimageindex",
 				                 "none"]
-				})
+				}
+		customResponseHeaders.update(payload)
 		return customResponseHeaders
 	
 	def appendLabelsForTraefik(self):
