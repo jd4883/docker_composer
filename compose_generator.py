@@ -14,14 +14,10 @@ if __name__ == "__main__":
 	defaults = file['Defaults']
 	hostfile = list()
 	for server in file['External Servers']:
-		for sub in file['External Servers'][server]["subdomains"]:
-			hostfile.append(sub)
+		hostfile = [sub for sub in file['External Servers'][server]["subdomains"]]
 	master_stack = dict()
 	for server in file['External Servers']:
-		sublist = list()
-		for sub in file['External Servers'][server]['subdomains']:
-			sub = f"{sub}.{defaults['Domain']}"
-			sublist.append(sub)
+		sublist = [f"{sub}.{defaults['Domain']}" for sub in file['External Servers'][server]['subdomains']]
 		file['External Servers'][server]['subdomains'] = sublist
 	gen_setup_servers_toml(defaults, file['External Servers'])
 	for stack in file['Stack Group Name']:
@@ -35,6 +31,12 @@ if __name__ == "__main__":
 		                          file['External Servers'],
 		                          file['Globals'])
 		configs = set_config_directory(stack)
+		yaml.dump(composeFile.globals, open(f"{configs}/docker-compose.yaml", "w+"),
+		          indent = 4,
+		          width = 85,
+		          default_flow_style = False)
+		gen_docker_yaml(configs, file['Stack Group Name'][stack], defaults, cleanup_name(stack), composeFile)
+		# this is probably redundant
 		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
 		networks = dict()
@@ -45,6 +47,5 @@ if __name__ == "__main__":
 			gen_setup_shell_script(stack, app, defaults, g, configs)
 			gen_app_specific_env_file(configs, app, set_environment(services[app]))
 			services[app]['HOSTS'] = ",".join(hosts)
-			gen_docker_yaml(configs, file['Stack Group Name'][stack], defaults, cleanup_name(stack), composeFile)
 		gen_hostfile(file['Stack Group Name'][stack], defaults, hostfile)
 		gen_master_stack_file(master_stack)

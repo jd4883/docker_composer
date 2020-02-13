@@ -1,4 +1,4 @@
-{{- "version:" + compose.globals["version"]|string|indent(41,true) }}
+{{- "version:" + "\""|indent(41,true) + compose.globals.version|string + "\"" }}
 {%- set SERVICES = stack.Services %}
 {{ "secrets:" }}
 {%- for secret in (compose.globals.secrets)|list|sort %}
@@ -171,13 +171,6 @@
 {%- if SERVICES[service]['networks'] and SERVICES[service]['networks']['vpn'] %}
 {{ "- \""|indent(10, true) + compose.vpnHostName + "\"" }}
 {%- endif %}
-{%- endif %}
-{%- if 'healthcheck' in SERVICES[service] and SERVICES[service]['healthcheck'] %}
-{{ "healthcheck:"|indent(8, true) }}
-{{ "test:"|indent(12,true) + SERVICES[service]['healthcheck']['test']|indent(36, true) }}
-{{ "interval:"|indent(12,true) + SERVICES[service]['healthcheck']['interval']|default(30, true) + "s" }}
-{{ "timeout:"|indent(12,true) + SERVICES[service]['healthcheck']['timeout']|default(30, true) + "s" }}
-{{ "retries:"|indent(12,true) + SERVICES[service]['healthcheck']['retries']|default(5, true) }}
 {%- endif %}
 {%- if 'entrypoint' in SERVICES[service] %}
 {{ "entrypoint:"|indent(8, true) + "|"|indent(30, true) }}
