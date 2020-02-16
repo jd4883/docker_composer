@@ -87,6 +87,7 @@ class ComposeFile(object):
 		self.conditionals.update({ "oauth": bool() })
 		self.conditionals.update({ "proxy_secrets": bool() })
 		self.oauth_port = oauth_port
+		self.ports = list()
 		self.authenticatedEmailsFile = str(authenticatedEmailsFile)
 		self.services = dict()
 		self.secrets.update({ 'puid': { "file": f"{self.secretsPath}/{'PUID'.upper()}.secret" } })
@@ -119,34 +120,15 @@ class ComposeFile(object):
 			# bandage fix make dynamic
 			if "openvpn" in k:
 				k = self.vpnContainerName
-			self.services.update({ k: dict() })
-			self.globals.update({ "services": self.services })
-			## INIT SERVICE DICT
-			self.setLocalVolumes(k, v)
-			#self.setHealthcheck(k)
-			#self.setLogging(k)
-			self.services[k].update({ "env_file": listCleanup(["globals.env", f"{k}.env"]) })
-			self.local_secrets = combineLocalSecrets(v)
-			self.ports = list()
-			self.puid = str(int(setItems(self, "PUID", self.defaults, puid)))
-			self.pgid = str(int(setItems(self, "PGID", self.defaults, pgid)))
-			path = set_config_directory(self.stackTitle)
-			self.environment = v["Environment"] if "Environment" in v else dict()
-			print(f"PARAMETERS:{path}\t{self.environment}\t{k}")
-			src.generators.gen_app_specific_env_file(path, k, self.environment)
-			#self.oauth_image = "quay.io/pusher/oauth2_proxy"
 			self.oauth_image = "a5huynh/oauth2_proxy:latest"
 			self.serviceProxy = f"{k}-proxy"
-			self.subdomains = list()
-			self.setConditionals(v)
 			self.dns = ["8.8.8.8", "8.8.4.4"]
-			## END SERVICE INIT
+			self.services.update({ k: dict() })
+			self.globals.update({ "services": self.services })
 			self.services.update({ k: { "volumes": list() } })
-			self.services[k].update({ "container_name": k })
-			self.services[k].update(parseImage(v))
-			self.services[k].update(self.parseLocalSecrets(v))
-			v["secrets"] = self.services[k]['secrets']
-			self.setPrivs(k)
+			self.setConditionals(v)
+			self.setLocalVolumes(k, v)
+			self.ports = list()
 			self.setNetworking(k, v)
 			# TODO: all traefik stuff should be in this class or a subclass
 			self.traefikLabels = Traefik(self,
@@ -154,6 +136,24 @@ class ComposeFile(object):
 			                             self.globalValues,
 			                             k,
 			                             v)
+			## INIT SERVICE DICT
+			# self.setHealthcheck(k)
+			# self.setLogging(k)
+			self.local_secrets = combineLocalSecrets(v)
+			self.puid = str(int(setItems(self, "PUID", self.defaults, puid)))
+			self.pgid = str(int(setItems(self, "PGID", self.defaults, pgid)))
+			self.services[k].update({ "container_name": k })
+			path = set_config_directory(self.stackTitle)
+			self.environment = v["Environment"] if "Environment" in v else dict()
+			print(f"PARAMETERS:{path}\t{self.environment}\t{k}")
+			src.generators.gen_app_specific_env_file(path, k, self.environment)
+			# self.oauth_image = "quay.io/pusher/oauth2_proxy"
+			
+			## END SERVICE INIT
+			self.services[k].update(parseImage(v))
+			self.services[k].update(self.parseLocalSecrets(v))
+			v["secrets"] = self.services[k]['secrets']
+			self.setPrivs(k)
 			self.labels = self.parseLabels(v)
 			if self.conditionals["Entrypoint"]:
 				self.services[k].update({ "entrypoint": v["Entrypoint"] })
@@ -166,7 +166,7 @@ class ComposeFile(object):
 				if not "depends_on" in self.services[k]:
 					self.services[k].update({ "depends_on": list() })
 				self.services[k]["depends_on"].append(self.vpnContainerName)
-			if k.lower() == "depends_on" and  k in self.services[k]["depends_on"]:
+			if k.lower() == "depends_on" and k in self.services[k]["depends_on"]:
 				self.services[k]["depends_on"].remove(k)
 			self.setCommands(k, v)
 			
@@ -180,19 +180,19 @@ class ComposeFile(object):
 				## SETS DOMAIN NAME
 				self.services[k].update({ "domainname": self.domain })
 			if self.combinedConditionals["frontend_no_oauth"]:
-				self.labels = [label for label in self.traefikLabels.labels + self.labels]
-				self.services[k].update({ "dns_search": listCleanup(self.subdomains) })
+				self.labels = listCleanup([label for label in self.traefikLabels.labels + self.labels])
+				self.services[k].update({ "dns_search": listCleanup(self.traefikLabels.subdomains) })
 				self.services[k].update({ "dns": listCleanup(self.dns) })
-			elif self.conditionals["oauth"] or self.conditionals["proxy_secrets"]:
-				if self.serviceProxy not in self.services:
-					self.services.update({ str(self.serviceProxy): dict() })
-				if "labels" not in self.services[self.serviceProxy]:
-					self.services[self.serviceProxy].update({ "labels": list() })
+			# should be elif
+			if self.conditionals["oauth"] or self.conditionals["proxy_secrets"]:
+				self.services.update({ self.serviceProxy: dict() })
+				self.services[self.serviceProxy].update({ "labels": listCleanup(listCleanup([x for x in self.traefikLabels.labels])) })
 				self.buildOauthObject(k)
-			# elif "networks" in self.services[k] and "frontend" in self.services[k]["networks"]:
-			# 	del self.services[k]["networks"]["frontend"]
+			else:
+				self.services[k].update({ "labels": listCleanup(self.labels) })
+			self.services[k].update({ "env_file": listCleanup(["globals.env", f"{k}.env"]) })
+			# not sure this is going through
 			
-			self.services[k].update({ "labels": listCleanup(self.labels) })
 			# TODO: clean up replace statement in a better way
 			
 			# conditionals - move to a separate class down the line
@@ -218,7 +218,7 @@ class ComposeFile(object):
 		if self.conditionals["ports"]:
 			self.ports = v["ports"]
 		if self.conditionals["vpn"]:
-			#print(f"VPN CONTAINER NAME:\t{self.vpnContainerName}")
+			# print(f"VPN CONTAINER NAME:\t{self.vpnContainerName}")
 			self.services[k].update({ "network_mode": f"service:{self.vpnContainerName}" })
 		else:
 			self.services[k].update(getServiceHostname(k))
@@ -235,7 +235,7 @@ class ComposeFile(object):
 			self.services[k].update(self.networks)
 	
 	def setLocalVolumes(self, k, v):
-		self.local_volumes = [vol for vol in v["Volumes"] if "Volumes" in v and v["Volumes"]]
+		self.local_volumes = [vol for vol in v["Volumes"]] if ("Volumes" in v and v["Volumes"]) else []
 		self.services[k].update({ "volumes": listCleanup(self.local_volumes) })
 	
 	def setPrivs(self, k):
@@ -244,35 +244,30 @@ class ComposeFile(object):
 		else:
 			self.services[k].update({ "user": f"{self.puid}:{self.pgid}" })
 	
-	# def setHealthcheck(self, k):
-	# 	if self.conditionals["healthcheck"]:
-	# 		healthcheck = {
-	# 				"healthcheck": {
-	# 						{ "test": ["CMD", "curl", "-f", "http://localhost"] },
-	# 						{ "interval": "1m30s" },
-	# 						{ "timeout": "10s" },
-	# 						{ "retries": 3 },
-	# 						{ "start_period": "40s" } }
-	# 				}
-	# 		self.services[k].update(healthcheck)
+	def setHealthcheck(self, k):
+		if self.conditionals["healthcheck"]:
+			healthcheck = {
+					"healthcheck": {
+							{ "test": ["CMD", "curl", "-f", "http://localhost"] },
+							{ "interval": "1m30s" },
+							{ "timeout": "10s" },
+							{ "retries": 3 },
+							{ "start_period": "40s" } }
+					}
+			self.services[k].update(healthcheck)
 	
-	# def setLogging(self, k):
-	# 	if self.conditionals["logging"]:
-	# 		logging = dict().update({ "driver": str("json-file") })
-	# 		logging.update({ "options": dict() })
-	# 		logging["options"].update({ "max-size": str("200k") })
-	# 		logging["options"].update({ "max-file": str(10) })
-	# 		self.services[k].update({ "logging": logging })
+	def setLogging(self, k):
+		if self.conditionals["logging"]:
+			logging = dict().update({ "driver": str("json-file") })
+			logging.update({ "options": dict() })
+			logging["options"].update({ "max-size": str("200k") })
+			logging["options"].update({ "max-file": str(10) })
+			self.services[k].update({ "logging": logging })
 	
 	def buildOauthObject(self, k):
 		# TODO: - logic can be improved here to remove the oauth secrets completely from the base
 		# TODO: make all oauth file reads rather or come from vault
 		authenticatedEmails = f"{self.authenticatedEmailsFile}:{self.authenticatedEmailsContainerPath}:ro"
-		# self.labels.append(f"{k}.oauth.backend={k}")
-		# self.labels.append(f"{k}.oauth.frontend={self.serviceProxy}")
-		# self.services[self.serviceProxy]["labels"].append(f"{k}.oauth.backend={k}")
-		# self.services[self.serviceProxy]["labels"].append(f"{k}.oauth.frontend={self.serviceProxy}")
-		# TODO: add handling to prevent oauth port here
 		
 		parsedPort = self.parsePort(k)
 		schema = "http" if str(parsedPort) != str(443) else "https"
@@ -289,13 +284,11 @@ class ComposeFile(object):
 				f"upstream={upstream}",
 				f"http-address=http://0.0.0.0:{self.oauth_port}",
 				f"provider={provider}",
-				f"redirect-url=https://{self.parsePrimarySubdomain(k)}",
+				f"redirect-url=https://{self.traefikLabels.parsePrimarySubdomain()}",
 				])
 		## APPEND SERVICE OAUTH LABEL
 		self.oauth = self.setOauthProxyFlags(k)
-		for x in self.traefikLabels.labels:
-			if x not in self.services[self.serviceProxy]["labels"]:
-				self.services[self.serviceProxy]["labels"].append(x)
+		self.services[self.serviceProxy]["labels"] = listCleanup([x for x in self.traefikLabels.labels])
 		self.services[self.serviceProxy].update(
 				{ "labels": listCleanup(self.services[self.serviceProxy]["labels"]) })
 		self.services[self.serviceProxy].update({ "container_name": self.serviceProxy })
@@ -306,14 +299,14 @@ class ComposeFile(object):
 		self.services[self.serviceProxy].update({ "volumes": [authenticatedEmails] })
 		self.services[self.serviceProxy].update({ "user": f"{self.puid}:{self.pgid}" })
 		self.services[self.serviceProxy].update({ "networks": listCleanup(["frontend", "backend"]) })
-		self.services[self.serviceProxy].update({ "dns_search": listCleanup(self.subdomains) })
+		self.services[self.serviceProxy].update({ "dns_search": listCleanup(self.traefikLabels.subdomains) })
 		self.services[self.serviceProxy].update({ "dns": listCleanup(self.dns) })
 		self.services[self.serviceProxy].update({ "depends_on": [k] })
 		self.services[self.serviceProxy].update({ "restart": "always" })
 		self.services[self.serviceProxy].update({ "command": listCleanup(oauthCommands) })
 		if "network_mode" in self.services[self.serviceProxy]:
 			if not "depends_on" in self.services[self.serviceProxy]:
-				self.services[self.serviceProxy].update({"depends_on": list()})
+				self.services[self.serviceProxy].update({ "depends_on": list() })
 			self.services[self.serviceProxy]["depends_on"].append(self.vpnContainerName)
 	
 	def globalVolumes(self):
@@ -340,8 +333,8 @@ class ComposeFile(object):
 				{ "vpn": (("networks" in v) and ("vpn" in v["networks"]) and (v["networks"]["vpn"]) or "vpn" in v) })
 		self.conditionals.update({ "mask_ports": ("mask_ports" in v and v["mask_ports"]) })
 		self.conditionals.update({ "DNS": ("DNS" in v and v["DNS"]) })
-		#self.conditionals.update({ "healthcheck": ("healthcheck" in v and v["healthcheck"]) })
-		#self.conditionals.update({ "logging": ("logging" in v and v["logging"]) })
+		# self.conditionals.update({ "healthcheck": ("healthcheck" in v and v["healthcheck"]) })
+		# self.conditionals.update({ "logging": ("logging" in v and v["logging"]) })
 		self.conditionals.update({ "Commands": ("Commands" in v and v["Commands"]) })
 		self.combinedConditionals.update(
 				{
@@ -357,7 +350,6 @@ class ComposeFile(object):
 		if environ in container and container[environ]:
 			payload = [str(x) for x in container[environ]]
 			self.services[name].update({ str(environ): payload })
-			#print(f'{environ.upper()}:\t{self.services[name][environ]}')
 	
 	def parseLocalSecrets(self, v):
 		if "secrets" in v:
@@ -393,13 +385,6 @@ class ComposeFile(object):
 		formatString(payload)
 		return payload
 	
-	def parsePrimarySubdomain(self, service):
-		try:
-			payload = self.subdomains[0]
-		except IndexError:
-			payload = ".".join([str(service), str(self.domain)])
-		return payload
-	
 	def parsePort(self, service, port = 80):
 		if service == "plex":
 			port = 32400
@@ -408,27 +393,9 @@ class ComposeFile(object):
 		elif self.ports:
 			port = str(self.ports[0]).split(":")[1]
 		return int(port)
-	
-	# def parseCustomFrameOptionsValue(self):
-	# 	urls = self.subdomains
-	# 	print(f"SELF SUBDOMAINS: {self.subdomains}")
-	# 	urls.append(f"https://{self.organizrURL}")
-	# 	allowFrom = f"allow-from {str(','.join(listCleanup(urls)))}"
-	# 	payload = ",".join(["SAMEORIGIN", allowFrom])
-	# 	return payload
-	#
-	# def parseCustomResponseHeader(self):
-	# 	headerList = list()
-	# 	for k, v in self.customResponseHeaders.items():
-	# 		value = ','.join(v)
-	# 		headerList.append(f"{k}: {value}")
-	# 	payload = ",".join(listCleanup(headerList))
-	# 	return payload
-
 
 def listCleanup(x):
 	return list(dict.fromkeys(x))
-
 
 def listToDict(x):
 	y = iter(x)

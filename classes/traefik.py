@@ -52,13 +52,15 @@ class Traefik(object):
 	
 	def set(self):
 		subdomains = str(",".join(listCleanup(self.subdomains))).replace(self.organizrURL, ",")
-		port = self.parsePort(self.service)
-		if self.compose.conditionals["oauth"]:
+		port = self.compose.parsePort(self.service)
+		if self.compose.conditionals["oauth"] or self.compose.conditionals["proxy_secrets"]:
 			port = self.compose.oauth_port
-		
+		self.labels = self.setLabels(port, subdomains)
+	
+	def setLabels(self, port, subdomains):
 		payload = listCleanup([
 				f"traefik.backend={self.service}",
-				f"traefik.docker.network={self.labels.frontendNetwork}",
+				f"traefik.docker.network=frontend",
 				f"traefik.frontend.headers.browserXSSFilter={str(bool(True)).lower()}",
 				f"traefik.frontend.headers.contentTypeNosniff={str(bool(True)).lower()}",
 				f"traefik.frontend.headers.customResponseHeaders={self.customResponseHeadersValue}",
@@ -72,11 +74,10 @@ class Traefik(object):
 				f"traefik.frontend.passHostHeader={str(bool(True)).lower()}",
 				f"traefik.protocol={self.traefikProtocol}",
 				f"traefik.{self.service}.frontend.headers.customFrameOptionsValue={self.customFrameOptionsValue}",
-				f"traefik.{self.service}.frontend.headers.SSLHost={self.parsePrimarySubdomain(self.service)}",
+				f"traefik.{self.service}.frontend.headers.SSLHost={self.parsePrimarySubdomain()}",
 				f"traefik.{self.service}.frontend.rule=Host:{subdomains}",
 				f"traefik.{self.service}.port={port}",
 				])
-		# change all to traefik.service for constency and multi port mapping
 		return payload
 	
 	def parseCustomFrameOptionsValue(self):
@@ -104,6 +105,13 @@ class Traefik(object):
 		payload = ",".join(listCleanup(headerList))
 		return payload
 
+	def parsePrimarySubdomain(self):
+		try:
+			payload = self.subdomains[0]
+		except IndexError:
+			payload = ".".join([str(self.service), str(self.domain)])
+		return payload
+
 
 def setCustomResponseHeader(customResponseHeaders):
 	payload = {
@@ -115,3 +123,4 @@ def setCustomResponseHeader(customResponseHeaders):
 
 def listCleanup(x):
 	return list(dict.fromkeys(x))
+
