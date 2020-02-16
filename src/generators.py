@@ -20,15 +20,11 @@ def gen_docker_yaml(configs, stack, defaults, stack_name, composeFile):
 	t = load_template('COMPOSE_YAML')
 	render = t.render(stack = stack, defaults = defaults, stack_name = stack_name, compose = composeFile)
 	backup.write(render)
-	print(f"Wrote dict: {backup}")
 	# if f_new.write(render):
 	# 	f_current.write(render)
 
 
 def gen_app_specific_env_file(configs, app, environment):
-	app = app.replace("_", "-")
-	app = app.replace(" ", "-")
-	app = app.lower()
 	print(f"Creating stack configuration: {configs}/{app}.env")
 	f = open(Path(f"{configs}/{app}.env"), "w+")
 	t = load_template('SERVICE_ENV')

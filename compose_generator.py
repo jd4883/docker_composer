@@ -22,7 +22,6 @@ if __name__ == "__main__":
 	gen_setup_servers_toml(defaults, file['External Servers'])
 	for stack in file['Stack Group Name']:
 		composeFile = ComposeFile(file['Defaults']['Domain'],
-		                          file["Defaults"]["VPN Container"],
 		                          stack,
 		                          file["Defaults"]["Email Authentication File"],
 		                          file["Defaults"]["Email"],
@@ -35,17 +34,18 @@ if __name__ == "__main__":
 		          indent = 4,
 		          width = 85,
 		          default_flow_style = False)
-		gen_docker_yaml(configs, file['Stack Group Name'][stack], defaults, cleanup_name(stack), composeFile)
+		#gen_docker_yaml(configs, file['Stack Group Name'][stack], defaults, cleanup_name(stack), composeFile)
 		# this is probably redundant
 		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
 		networks = dict()
-		for app in services:
+                # env files seem to not generate correctly
+		for app in composeFile.services:
 			hosts = list()
+			#gen_app_specific_env_file(configs, app, set_environment(composeFile.services[app]))
 			master_stack[get_index(stack)] = get_stack_file(stack)
-			parse_hostfile(services[app], hostfile, hosts, defaults)
+			parse_hostfile(composeFile.services[app], hostfile, hosts, defaults)
 			gen_setup_shell_script(stack, app, defaults, g, configs)
-			gen_app_specific_env_file(configs, app, set_environment(services[app]))
-			services[app]['HOSTS'] = ",".join(hosts)
+			composeFile.services[app]['HOSTS'] = ",".join(hosts)
 		gen_hostfile(file['Stack Group Name'][stack], defaults, hostfile)
-		gen_master_stack_file(master_stack)
+	gen_master_stack_file(master_stack)
