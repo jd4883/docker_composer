@@ -39,10 +39,8 @@ if __name__ == "__main__":
 		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
 		networks = dict()
-                # env files seem to not generate correctly
 		for app in composeFile.services:
 			hosts = list()
-			#gen_app_specific_env_file(configs, app, set_environment(composeFile.services[app]))
 			master_stack[get_index(stack)] = get_stack_file(stack)
 			parse_hostfile(composeFile.services[app], hostfile, hosts, defaults)
 			gen_setup_shell_script(stack, app, defaults, g, configs)

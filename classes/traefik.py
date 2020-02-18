@@ -27,14 +27,16 @@ class Traefik(object):
 		                                            globalValues,
 		                                            backendNetwork,
 		                                            1))
-		self.organizrURL = f"https://{organizrSubdomain}.{compose.domain}"
+		self.organizrURL = f"{organizrSubdomain}.{compose.domain}"
 		self.labels = list()
-		self.traefikProtocol = traefikProtocol
 		self.service = str(service)
 		self.oauthService = f"{service}-proxy"
+		self.backendLabel = self.service if not (self.compose.conditionals["oauth"] or self.compose.conditionals[
+			"proxy_secrets"]) else f"{self.oauthService}"
 		self.serviceItems = serviceItems
 		self.subdomains = self.setSubdomains()
 		self.ports = str(80) if not ports else ports
+		self.protocol = traefikProtocol
 		self.customResponseHeaders = setCustomResponseHeader(customResponseHeaders)
 		self.customResponseHeadersValue = self.parseCustomResponseHeader()
 		self.customFrameOptionsValue = self.parseCustomFrameOptionsValue()
@@ -43,24 +45,27 @@ class Traefik(object):
 	def setSubdomains(self):
 		subdomains = list()
 		if "subdomains" in self.serviceItems and self.serviceItems["subdomains"]:
-			subdomains = [".".join([sub, self.compose.domain]) for sub in self.combineSubdomains() if
-			              not str(sub).startswith("http")]
-		return listCleanup(subdomains)
+			subdomains = [".".join([sub, self.compose.domain]) for sub in self.combineSubdomains()]
+		payload = listCleanup(subdomains)
+		return payload
 	
 	def combineSubdomains(self):
-		return self.serviceItems["subdomains"] + [".".join([self.service, self.compose.domain])]
+		payload = self.serviceItems["subdomains"] + [self.service]
+		return payload
 	
 	def set(self):
-		subdomains = str(",".join(listCleanup(self.subdomains))).replace(self.organizrURL, ",")
+		initSubdomains = listCleanup(self.subdomains)
+		subdomains = str(",".join(initSubdomains))
 		port = self.compose.parsePort(self.service)
 		if self.compose.conditionals["oauth"] or self.compose.conditionals["proxy_secrets"]:
 			port = self.compose.oauth_port
 		self.labels = self.setLabels(port, subdomains)
 	
 	def setLabels(self, port, subdomains):
-		payload = listCleanup([
-				f"traefik.backend={self.service}",
+		payload = [
+				f"traefik.backend={self.backendLabel}",
 				f"traefik.docker.network=frontend",
+				f"traefik.enable={str(bool(True)).lower()}",
 				f"traefik.frontend.headers.browserXSSFilter={str(bool(True)).lower()}",
 				f"traefik.frontend.headers.contentTypeNosniff={str(bool(True)).lower()}",
 				f"traefik.frontend.headers.customResponseHeaders={self.customResponseHeadersValue}",
@@ -72,44 +77,43 @@ class Traefik(object):
 				f"traefik.frontend.headers.STSPreload={str(bool(True)).lower()}",
 				f"traefik.frontend.headers.STSSeconds=315360000",
 				f"traefik.frontend.passHostHeader={str(bool(True)).lower()}",
-				f"traefik.protocol={self.traefikProtocol}",
+				f"traefik.protocol={self.protocol}",
 				f"traefik.{self.service}.frontend.headers.customFrameOptionsValue={self.customFrameOptionsValue}",
 				f"traefik.{self.service}.frontend.headers.SSLHost={self.parsePrimarySubdomain()}",
 				f"traefik.{self.service}.frontend.rule=Host:{subdomains}",
 				f"traefik.{self.service}.port={port}",
-				])
-		return payload
+				# f"traefik.frontend.headers.customFrameOptionsValue={self.customFrameOptionsValue}",
+				# f"traefik.frontend.headers.SSLHost={self.parsePrimarySubdomain()}",
+				# f"traefik.frontend.rule=Host:{subdomains}",
+				# f"traefik.port={port}",
+				]
+		return listCleanup(payload)
 	
 	def parseCustomFrameOptionsValue(self):
-		urls = self.subdomains
-		print(f"SELF SUBDOMAINS: {self.subdomains}")
+		urls = [f"https://{url}" for url in self.subdomains]
 		urls.append(f"https://{self.organizrURL}")
-		allowFrom = f"allow-from {str(','.join(listCleanup(urls)))}"
+		allowFrom = f"'allow-from {str(','.join(listCleanup(urls)))}'"
 		payload = ",".join(["SAMEORIGIN", allowFrom])
 		return payload
 	
 	def parsePort(self, service, port = 80):
 		if service == "plex":
 			port = 32400
-		# elif compose.conditionals["oauth"]:
-		# 	port = str(self.compose.oauth_port)
 		elif self.ports:
 			port = str(self.ports[0]).split(":")[1]
+		if port == (443 or str(443)):
+			self.protocol = "https"
 		return int(port)
 	
 	def parseCustomResponseHeader(self):
-		headerList = list()
-		for k, v in self.customResponseHeaders.items():
-			value = ','.join(v)
-			headerList.append(f"{k}: {value}")
-		payload = ",".join(listCleanup(headerList))
+		payload = ",".join(listCleanup([(f"{k}:{','.join(v)}") for k, v in self.customResponseHeaders.items()]))
 		return payload
-
+	
 	def parsePrimarySubdomain(self):
 		try:
 			payload = self.subdomains[0]
 		except IndexError:
-			payload = ".".join([str(self.service), str(self.domain)])
+			payload = ".".join([str(self.service), str(self.compose.domain)])
 		return payload
 
 
@@ -123,4 +127,3 @@ def setCustomResponseHeader(customResponseHeaders):
 
 def listCleanup(x):
 	return list(dict.fromkeys(x))
-
