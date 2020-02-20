@@ -5,10 +5,9 @@ import shutil
 from pathlib import Path
 
 from src.helpers import load_template
-import yaml
+
 
 def gen_docker_yaml(configs, stack, defaults, stack_name, composeFile):
-	new = f"{configs}/docker-compose.yaml.new"
 	old = f"{configs}/docker-compose.yaml.old"
 	current = f"{configs}/docker-compose.yaml"
 	print(f"Creating stack configuration: {current}")

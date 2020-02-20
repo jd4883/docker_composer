@@ -1,4 +1,5 @@
 import src.generators
+from classes.oauth import OauthProxy
 from classes.traefik import Traefik
 from src.formatting import formatString
 from src.gets import getServiceHostname, set_config_directory
@@ -51,47 +52,6 @@ def combineLocalSecrets(v):
 	return payload
 
 
-class OauthProxy(object):
-	def __init__(self,
-	             service,
-	             compose):
-		self.service = str(service)
-		self.container_name = str(f"{service}-proxy")
-		self.depends_on = [service]
-		self.schema = "http" if str(compose.parsePort(service)) != str(443) else "https"
-		self.upstream = self.parseUpstream(compose)
-		self.provider = "github"
-		self.commands = listCleanup([
-				f"cookie-secure=false",
-				f"authenticated-emails-file={compose.authenticatedEmailsContainerPath}",
-				f"email-domain=gmail",
-				f"upstream={self.upstream}",
-				f"http-address=http://0.0.0.0:{compose.oauth_port}",
-				f"provider={self.provider}",
-				f"redirect-url=https://{compose.traefikLabels.parsePrimarySubdomain()}",
-				])
-		self.dns = compose.dns
-		self.dns_search = list()
-		self.env_file = list()
-		self.image_name = "a5huynh/oauth2_proxy"
-		# self.image_name = "quay.io/pusher/oauth2_proxy"
-		self.image_tag = "latest"
-		self.image = ":".join([self.image_name, self.image_tag])
-		self.labels = list()
-		self.networks = dict()
-		self.secrets = list()
-		self.volumes = list()
-	
-	def parseUpstream(self, compose):
-		if compose.conditionals["vpn"] and compose.conditionals["ports"]:
-			payload = f"{self.schema}://{'-'.join([compose.stackTitle.lower(), 'pia-openvpn'])}:{compose.parsePort(self.service)}"
-		elif compose.conditionals["ports"]:
-			payload = f"{self.schema}://{self.service}:{compose.parsePort(self.service)}"
-		else:
-			payload = f"{self.schema}://{self.service}:80"
-		return payload
-
-
 class ComposeFile(object):
 	def __init__(self,
 	             domain = "example.com",
@@ -110,6 +70,7 @@ class ComposeFile(object):
 	             pgid = str(1001),
 	             version = 3.7,
 	             frontendIP = "192.168.80"):
+		self.networks = dict()
 		self.stackDict = stackDict
 		self.defaults = defaults
 		self.local_volumes = list()
@@ -164,13 +125,20 @@ class ComposeFile(object):
 				k = self.vpnContainerName
 			self.services.update({ k: dict() })
 			self.globals.update({ "services": self.services })
+			self.networks = {
+					"networks": {
+							"backend":  { "ipv4_address": f"{self.ip}.{self.fourthOctet}" },
+							"frontend": dict(),  # { "ipv4_address": f"{self.frontendIP}.{self.fourthOctet}" }
+							}
+					}
 			self.services.update({ k: { "volumes": list() } })
 			self.setConditionals(v)
 			self.setLocalVolumes(k, v)
 			self.ports = list()
+			self.envFile = { "env_file": listCleanup(["globals.env", f"{k}.env"]) }
+			self.services[k].update(self.envFile)
 			self.dns = ["8.8.8.8", "8.8.4.4"]
 			# TODO: all traefik stuff should be in this class or a subclass
-			
 			
 			## INIT SERVICE DICT
 			# self.setHealthcheck(k)
@@ -211,8 +179,8 @@ class ComposeFile(object):
 				self.services[k]["depends_on"].remove(k)
 			self.setCommands(k, v)
 			
-			self.oauthService = OauthProxy(k, self)
-			if (not self.traefikLabels.subdomains) or (self.conditionals["proxy_secrets"] or self.conditionals["oauth"]):
+			if (not self.traefikLabels.subdomains) or (
+					self.conditionals["proxy_secrets"] or self.conditionals["oauth"]):
 				try:
 					del self.networks["networks"]["frontend"]
 				except KeyError:
@@ -224,23 +192,32 @@ class ComposeFile(object):
 				self.services[k].update({ "domainname": self.domain })
 			if self.combinedConditionals["frontend_no_oauth"]:
 				self.labels = listCleanup([label for label in self.traefikLabels.labels + self.labels])
-				self.services[k].update({ "dns_search": listCleanup(self.traefikLabels.subdomains) })
-				self.services[k].update({ "dns": listCleanup(self.dns) })
-			# should be elif
+				try:
+					self.services[k].update({ "dns_search": listCleanup(self.traefikLabels.subdomains) })
+					self.services[k].update({ "dns": listCleanup(self.dns) })
+				except KeyError:
+					pass
 			if self.conditionals["oauth"] or self.conditionals["proxy_secrets"]:
-				self.services.update({ self.oauthService.container_name: dict() })
-				self.services[self.oauthService.container_name].update(
-						{ "labels": listCleanup(listCleanup([x for x in self.traefikLabels.labels])) })
-				self.buildOauthObject(k)
+				self.services.update(OauthProxy(k, self).obj)
 			else:
-				self.services[k].update({ "labels": listCleanup(self.labels) })
-			self.services[k].update({ "env_file": listCleanup(["globals.env", f"{k}.env"]) })
+				try:
+					self.services[k].update({ "labels": listCleanup(self.labels) })
+				except KeyError:
+					pass
 			# not sure this is going through
 			
 			# TODO: clean up replace statement in a better way
 			
 			# conditionals - move to a separate class down the line
-			self.dictCleanup(k)
+			try:
+				self.dictCleanup(k)
+			except KeyError:
+				pass
+	
+		# handles oauth for external services probably shouldnt do this this way
+		# for k, v in externalServers.items():
+		# 	if v["oauth"] and v["stack"] == self.stackTitle:
+		# 		self.services.update(OauthProxy(k, self, True).obj)
 	
 	def parseLabels(self, v):
 		return listCleanup([x for x in v["labels"]] if "labels" in v else list())
@@ -269,12 +246,6 @@ class ComposeFile(object):
 				if self.ports.__len__() > 0:
 					self.services[k].update({ "ports": self.ports })
 			# self.networks = { "networks": ["backend", "frontend"] }
-			self.networks = {
-					"networks": {
-							"backend":  { "ipv4_address": f"{self.ip}.{self.fourthOctet}" },
-							"frontend": dict(),  # { "ipv4_address": f"{self.frontendIP}.{self.fourthOctet}" }
-							}
-					}
 			self.services[k].update(self.networks)
 	
 	def setLocalVolumes(self, k, v):
@@ -306,37 +277,42 @@ class ComposeFile(object):
 			logging["options"].update({ "max-size": str("200k") })
 			logging["options"].update({ "max-file": str(10) })
 			self.services[k].update({ "logging": logging })
-	
-	def buildOauthObject(self, k):
-		# TODO: - logic can be improved here to remove the oauth secrets completely from the base
-		# TODO: make all oauth file reads rather or come from vault
-		authenticatedEmails = f"{self.authenticatedEmailsFile}:{self.authenticatedEmailsContainerPath}:ro"
-		oauthCommands = self.oauthService.commands
-		self.proxy_networks = {
-				"networks": {
-						"backend":  { "ipv4_address": f"{self.ip}.{self.fourthOctet - 150}" },
-						"frontend": dict()  # { "ipv4_address": f"{self.frontendIP}.{self.fourthOctet - 150}" }
-						}
-				}
-		## APPEND SERVICE OAUTH LABEL
-		self.oauth = self.setOauthProxyFlags(k)
-		self.services[self.oauthService.container_name]["labels"] = listCleanup([x for x in self.traefikLabels.labels])
-		self.services[self.oauthService.container_name].update(
-				{ "labels": listCleanup(self.services[self.oauthService.container_name]["labels"]) })
-		self.services[self.oauthService.container_name].update({ "container_name": self.oauthService.container_name })
-		# self.services[self.oauthService.container_name].update({ "hostname": self.oauthService.container_name })
-		self.services[self.oauthService.container_name].update({ "image": self.oauthService.image })
-		self.services[self.oauthService.container_name].update({ "secrets": listCleanup(self.local_secrets) })
-		self.services[self.oauthService.container_name].update({ "env_file": listCleanup(["globals.env", f"{k}.env"]) })
-		self.services[self.oauthService.container_name].update({ "volumes": [authenticatedEmails] })
-		self.services[self.oauthService.container_name].update({ "user": f"{self.puid}:{self.pgid}" })
-		self.services[self.oauthService.container_name].update(self.proxy_networks)
-		# self.services[self.oauthService.container_name].update({ "networks": listCleanup(["frontend", "backend"]) })
-		self.services[self.oauthService.container_name].update({ "dns_search": listCleanup(self.traefikLabels.subdomains) })
-		self.services[self.oauthService.container_name].update({ "dns": listCleanup(self.dns) })
-		self.services[self.oauthService.container_name].update({ "depends_on": [k] })
-		self.services[self.oauthService.container_name].update({ "restart": "always" })
-		self.services[self.oauthService.container_name].update({ "command": listCleanup(oauthCommands) })
+		
+		# def buildOauthObject(self, k):
+		# 	# TODO: - logic can be improved here to remove the oauth secrets completely from the base
+		# 	# TODO: make all oauth file reads rather or come from vault
+		# 	oauthCommands = self.oauthService.commands
+		# 	self.proxy_networks = {
+		# 			"networks": {
+		# 					"backend":  { "ipv4_address": f"{self.ip}.{self.fourthOctet - 150}" },
+		# 					"frontend": dict()  # { "ipv4_address": f"{self.frontendIP}.{self.fourthOctet - 150}" }
+		# 					}
+		# 			}
+		# 	## APPEND SERVICE OAUTH LABEL
+		# 	self.services[self.oauthService.container_name]["labels"] = listCleanup([x for x in
+		# 	self.traefikLabels.labels])
+		# 	self.services[self.oauthService.container_name].update(
+		# 			{ "labels": listCleanup(self.services[self.oauthService.container_name]["labels"]) })
+		# 	self.services[self.oauthService.container_name].update({ "container_name":
+		# 	self.oauthService.container_name })
+		# 	# self.services[self.oauthService.container_name].update({ "hostname": self.oauthService.container_name })
+		# 	self.services[self.oauthService.container_name].update({ "image": self.oauthService.image })
+		# 	self.services[self.oauthService.container_name].update({ "secrets": listCleanup(self.local_secrets) })
+		# 	self.services[self.oauthService.container_name].update({
+		# 			"env_file": listCleanup(["globals.env",
+		# 			                         f"{k}.env"])
+		# 			})
+		# 	#self.services[self.oauthService.container_name].update({ "volumes": [authenticatedEmails] })
+		# 	self.services[self.oauthService.container_name].update({ "user": f"{self.puid}:{self.pgid}" })
+		# 	self.services[self.oauthService.container_name].update(self.proxy_networks)
+		# 	# self.services[self.oauthService.container_name].update({ "networks": listCleanup(["frontend",
+		# 	"backend"]) })
+		# 	self.services[self.oauthService.container_name].update(
+		# 			{ "dns_search": listCleanup(self.traefikLabels.subdomains) })
+		# 	self.services[self.oauthService.container_name].update({ "dns": listCleanup(self.dns) })
+		# 	self.services[self.oauthService.container_name].update({ "depends_on": [k] })
+		# 	self.services[self.oauthService.container_name].update({ "restart": "always" })
+		# 	self.services[self.oauthService.container_name].update({ "command": listCleanup(oauthCommands) })
 		if "network_mode" in self.services[self.oauthService.container_name]:
 			if not "depends_on" in self.services[self.oauthService.container_name]:
 				self.services[self.oauthService.container_name].update({ "depends_on": list() })
@@ -400,16 +376,16 @@ class ComposeFile(object):
 			self.secrets.update({ f"{name}_proxy_client_id": { "file": f"{base}CLIENT_ID.secret" } })
 			self.secrets.update({ f"{name}_proxy_client_secret": { "file": f"{base}CLIENT_SECRET.secret" } })
 			self.secrets.update({ f"{name}_proxy_cookie_secret": { "file": f"{base}COOKIE_SECRET.secret" } })
-			# secrets per service
-			self.local_secrets += [
-					f"{name}_proxy_client_id",
-					f"{name}_proxy_client_secret",
-					f"{name}_proxy_cookie_secret",
-					]
+		# secrets per service
+		# self.local_secrets += [
+		# 		f"{name}_proxy_client_id",
+		# 		f"{name}_proxy_client_secret",
+		# 		f"{name}_proxy_cookie_secret",
+		# 		]
 		return payload
 	
-	def setVPNHostname(self, vpn):
-		payload = '-'.join([self.stackTitle.lower(), 'pia-openvpn'])
+	def setVPNHostname(self, vpn = 'pia-openvpn'):
+		payload = '-'.join([self.stackTitle.lower(), vpn])
 		return payload
 	
 	def parseOrganizrFQDN(self):
@@ -421,8 +397,6 @@ class ComposeFile(object):
 	def parsePort(self, service, port = 80):
 		if service == "plex":
 			port = 32400
-		# elif self.conditionals["oauth"]:
-		# 	port = str(self.oauth_port)
 		elif self.ports:
 			port = str(self.ports[0]).split(":")[1]
 		return int(port)

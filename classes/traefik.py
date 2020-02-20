@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.7
 from src.formatting import formatString
 from src.sets import setItems
 
@@ -101,12 +101,12 @@ class Traefik(object):
 			port = 32400
 		elif self.ports:
 			port = str(self.ports[0]).split(":")[1]
-		if port == (443 or str(443)):
+		if port == (443 or str(443)) or (self.service == "nextcloud"):
 			self.protocol = "https"
 		return int(port)
 	
 	def parseCustomResponseHeader(self):
-		payload = ",".join(listCleanup([(f"{k}:{','.join(v)}") for k, v in self.customResponseHeaders.items()]))
+		payload = ",".join(listCleanup([f"{k}:{','.join(v)}" for k, v in self.customResponseHeaders.items()]))
 		return payload
 	
 	def parsePrimarySubdomain(self):

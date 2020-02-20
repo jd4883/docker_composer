@@ -1,11 +1,12 @@
 #!/usr/bin/env python3.7
 import yaml
+
 from classes.composeParameters import ComposeFile
 from src.generators import *
 from src.gets import get_index, get_stack_file, set_config_directory
-from src.parser import parse_hostfile
-from src.sets import set_environment, set_services
 from src.helpers import *
+from src.parser import parse_hostfile
+from src.sets import set_services
 
 if __name__ == "__main__":
 	parameters = open(Path(str("/parameters.yaml")))
@@ -34,7 +35,7 @@ if __name__ == "__main__":
 		          indent = 4,
 		          width = 85,
 		          default_flow_style = False)
-		#gen_docker_yaml(configs, file['Stack Group Name'][stack], defaults, cleanup_name(stack), composeFile)
+		# gen_docker_yaml(configs, file['Stack Group Name'][stack], defaults, cleanup_name(stack), composeFile)
 		# this is probably redundant
 		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
