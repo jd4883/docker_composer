@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.7
 def set_environment(app):
 	in_app = 'Environment' in app and app['Environment']
 	return app['Environment'] if in_app else str()

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.7
 import os
 
 from src.helpers import mkdir
@@ -27,3 +27,8 @@ def set_config_directory(stack):
 	mkdir(configs)
 	print(f"Creating stack configuration: {configs}")
 	return configs
+
+
+def getServiceHostname(k):
+	payload = { "hostname": k }
+	return payload

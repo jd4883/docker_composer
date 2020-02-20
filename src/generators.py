@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.7
 import json
 import os
 import shutil
@@ -8,24 +8,22 @@ from src.helpers import load_template
 
 
 def gen_docker_yaml(configs, stack, defaults, stack_name, composeFile):
-	new = f"{configs}/docker-compose.yaml.new"
 	old = f"{configs}/docker-compose.yaml.old"
 	current = f"{configs}/docker-compose.yaml"
 	print(f"Creating stack configuration: {current}")
 	if os.path.isfile(current) and not (os.stat(current).st_size == 0):
 		shutil.copyfile(current, old)
-	f_new = open(new, "w+")
-	f_current = open(current, "w+")
+	backup = open(old, "w+")
+	# f_new = open(new, "w+")
+	# f_current = open(current, "w+")
 	t = load_template('COMPOSE_YAML')
 	render = t.render(stack = stack, defaults = defaults, stack_name = stack_name, compose = composeFile)
-	if f_new.write(render):
-		f_current.write(render)
+	backup.write(render)
+	# if f_new.write(render):
+	# 	f_current.write(render)
 
 
 def gen_app_specific_env_file(configs, app, environment):
-	app = app.replace("_", "-")
-	app = app.replace(" ", "-")
-	app = app.lower()
 	print(f"Creating stack configuration: {configs}/{app}.env")
 	f = open(Path(f"{configs}/{app}.env"), "w+")
 	t = load_template('SERVICE_ENV')

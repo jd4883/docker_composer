@@ -24,7 +24,8 @@ ENV COMPOSE_YAML /config/templates/docker-compose.jinja.yaml
 ENV SERVERS_TOML_TEMPLATE /config/templates/servers.jinja.toml
 ENV STACKS_JSON /stacks.json
 
-RUN echo '*/2 *  *  *  * python /config/compose_generator.py' > /etc/crontabs/root; cat /etc/crontabs/root
+# adjust timer to be an argument
+RUN echo '*/1 *  *  *  * python /config/compose_generator.py' > /etc/crontabs/root; cat /etc/crontabs/root
 
 RUN ["chmod", "+x", "/config/compose_generator.py", "/config/launcher.sh"]
 CMD ["/usr/sbin/crond", "-f", "-d", "8"]
