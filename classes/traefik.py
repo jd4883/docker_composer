@@ -15,10 +15,9 @@ class Traefik(object):
 	             frontendNetwork = "frontend",
 	             backendNetwork = "backend",
 	             organizrSubdomain = "home",
-	             customResponseHeaders = dict(),
-	             oauthPort = 4183
+	             customResponseHeaders = dict()
 	             ):
-		self.oauthPort = rand(23700, 23900) # historic default is 4180, went ephemeral here
+		self.oauthPort = rand(23700, 23900)  # historic default is 4180, went ephemeral here
 		self.passHostHeader = ("traefik.frontend.passHostHeader", True)
 		self.stsSeconds = ("traefik.frontend.headers.STSSeconds", 315360000)
 		self.stsPreload = ("traefik.frontend.headers.STSPreload", True)
@@ -132,9 +131,8 @@ def setCustomResponseHeader(customResponseHeaders):
 			# "usb": None,
 			# "vibrate": None,
 			# "vr": None,
-	        #   #||server:''||X-Powered-By:''"
+			#   #||server:''||X-Powered-By:''"
 			}
-	
 	
 	customResponseHeaders.update(payload)
 	return customResponseHeaders

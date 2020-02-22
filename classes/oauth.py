@@ -89,7 +89,7 @@ class OauthProxy(object):
 				f"--authenticated-emails-file={compose.authenticatedEmailsContainerPath}",
 				f"--client-id={self.clientIdEnviron}",
 				f"--client-secret-file=/run/secrets/{self.secrets[1]}",
-				#f"--cookie-domain={compose.domain}",
+				# f"--cookie-domain={compose.domain}",
 				f"--cookie-expire={cookieExpiration}h",
 				f"--cookie-httponly=false",
 				f"--cookie-refresh={cookieRefreshInerval}h",
@@ -107,8 +107,6 @@ class OauthProxy(object):
 				str(self.container_name): {
 						"image":                self.image,
 						"secrets":              self.secrets,
-						#"container_name":       self.container_name,
-						#"hostname":             self.container_name,
 						str(self.env.fileName): self.env.files,
 						"networks":             self.networks,
 						"labels":               self.labels,
@@ -120,7 +118,6 @@ class OauthProxy(object):
 				str(self.container_name): {
 						"image":                self.image,
 						"secrets":              self.secrets,
-						#"container_name":       self.container_name,
 						str(self.env.fileName): self.env.files,
 						"network_mode":         f"service:{compose.vpnContainerName}",
 						"labels":               self.labels,

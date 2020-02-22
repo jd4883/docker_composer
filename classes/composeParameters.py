@@ -52,6 +52,10 @@ def combineLocalSecrets(v):
 	return payload
 
 
+def parseLabels(v):
+	return {x for x in v["labels"]} if "labels" in v else dict()
+
+
 class ComposeFile(object):
 	def __init__(self,
 	             domain = "example.com",
@@ -151,7 +155,7 @@ class ComposeFile(object):
 			self.services[k].update(self.parseLocalSecrets(v))
 			v["secrets"] = self.services[k]['secrets']
 			self.setPrivs(k)
-			self.labels = self.parseLabels(v)
+			self.labels = parseLabels(v)
 			if self.conditionals["Entrypoint"]:
 				self.services[k].update({ "entrypoint": v["Entrypoint"] })
 			
@@ -167,7 +171,7 @@ class ComposeFile(object):
 			self.setCommands(k, v)
 			
 			if ((not self.traefik.subdomains) or (
-					self.conditionals["proxy_secrets"] or self.conditionals["oauth"])) and "vpn" not in v:
+					self.conditionals["proxy_secrets"] or self.conditionals["oauth"])) and k != self.vpnContainerName:
 				try:
 					del self.networks["networks"]["frontend"]
 				except (KeyError, TypeError):
@@ -202,15 +206,10 @@ class ComposeFile(object):
 						pass
 			if k.lower() == "depends_on" and k in self.services[k]["depends_on"]:
 				self.services[k]["depends_on"].remove(k)
-			if k == self.vpnContainerName:
-				self.services[k]["networks"].update({"frontend": dict()})
 			try:
 				self.dictCleanup(k)
 			except (KeyError, TypeError):
 				pass
-	
-	def parseLabels(self, v):
-		return {x for x in v["labels"]} if "labels" in v else dict()
 	
 	def dictCleanup(self, k):
 		self.removeEmptyDict(k, "labels")
