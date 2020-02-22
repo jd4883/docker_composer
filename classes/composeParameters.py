@@ -202,6 +202,8 @@ class ComposeFile(object):
 						pass
 			if k.lower() == "depends_on" and k in self.services[k]["depends_on"]:
 				self.services[k]["depends_on"].remove(k)
+			if k == self.vpnContainerName:
+				self.services[k]["networks"].update({"frontend": dict()})
 			try:
 				self.dictCleanup(k)
 			except (KeyError, TypeError):

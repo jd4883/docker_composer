@@ -1,4 +1,6 @@
 #!/usr/bin/env python3.7
+from random import randrange as rand
+
 from src.formatting import formatString
 from src.sets import setItems
 
@@ -13,8 +15,10 @@ class Traefik(object):
 	             frontendNetwork = "frontend",
 	             backendNetwork = "backend",
 	             organizrSubdomain = "home",
-	             customResponseHeaders = dict()
+	             customResponseHeaders = dict(),
+	             oauthPort = 4183
 	             ):
+		self.oauthPort = rand(23700, 23900) # historic default is 4180, went ephemeral here
 		self.passHostHeader = ("traefik.frontend.passHostHeader", True)
 		self.stsSeconds = ("traefik.frontend.headers.STSSeconds", 315360000)
 		self.stsPreload = ("traefik.frontend.headers.STSPreload", True)
@@ -65,11 +69,10 @@ class Traefik(object):
 		return payload
 	
 	def set(self):
-		initSubdomains = list(dict.fromkeys(self.subdomains))
-		subdomains = str(",".join(initSubdomains))
+		subdomains = str(",".join(list(dict.fromkeys(self.subdomains))))
 		port = self.compose.parsePort(self.service)
 		if self.compose.conditionals["oauth"] or self.compose.conditionals["proxy_secrets"]:
-			port = self.compose.oauth_port
+			port = self.oauthPort
 		self.labels = dict([self.backend,
 		                    self.network,
 		                    self.enable,
@@ -87,9 +90,11 @@ class Traefik(object):
 		                    ("traefik.frontend.rule", f"Host:{subdomains}"),
 		                    ("traefik.port", port),
 		                    ("traefik.protocol", self.protocol)])
-		# if self.service == "nextcloud":
-		# 	self.labels.update({ "traefik.frontend.redirect.regex": "https://(.*)/.well-known/(card|cal)dav" })
-		# 	self.labels.update({ "traefik.frontend.redirect.replacement", "https://$$1/remote.php/dav/" })
+		# bandage fix should be a better way
+		if self.service == "nextcloud":
+			self.labels["traefik.protocol"] = "https"
+			self.labels["traefik.frontend.redirect.regex"] = "https://(.*)/.well-known/(card|cal)dav"
+			self.labels["traefik.frontend.redirect.replacement"] = "https://$$1/remote.php/dav/"
 	
 	def parseCustomFrameOptionsValue(self):
 		urls = ["SAMEORIGIN", f"https://{self.organizrURL}"]
@@ -101,13 +106,10 @@ class Traefik(object):
 			port = 32400
 		elif self.ports:
 			port = str(self.ports[0]).split(":")[1]
-		if port == (443 or str(443)) or (self.service == "nextcloud"):
-			self.protocol = "https"
 		return int(port)
 	
 	def parseCustomResponseHeader(self):
-		x = [f"{k}:{','.join(v)}" for k, v in self.customResponseHeaders.items()]
-		payload = ",".join(list(dict.fromkeys(x)))
+		payload = ",".join(list(dict.fromkeys([f"{k}:{','.join(v)}" for k, v in self.customResponseHeaders.items()])))
 		return payload
 	
 	def parsePrimarySubdomain(self):
@@ -121,6 +123,18 @@ class Traefik(object):
 def setCustomResponseHeader(customResponseHeaders):
 	payload = {
 			"X-Robots-Tag": ["noindex", "nofollow", "nosnippet", "noarchive", "notranslate", "noimageindex", "none"]
+			# "Feature-Policy:camera": None,
+			# "fullscreen":None,
+			# "geolocation": None,
+			# "microphone": None,
+			# "payment": None,
+			# "speaker": None,
+			# "usb": None,
+			# "vibrate": None,
+			# "vr": None,
+	        #   #||server:''||X-Powered-By:''"
 			}
+	
+	
 	customResponseHeaders.update(payload)
 	return customResponseHeaders

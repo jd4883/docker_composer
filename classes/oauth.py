@@ -13,7 +13,6 @@ class OauthProxy(object):
 	             emailDomain = 'gmail',
 	             cookieRefreshInerval = 1,
 	             cookieExpiration = 672,
-	             oauthPort = 4180,
 	             network = 'frontend'):
 		self.service = str(service)
 		self.container_name = str(f"{service}-proxy")
@@ -39,9 +38,7 @@ class OauthProxy(object):
 		self.labels = dict([
 				("traefik.backend", self.container_name),
 				compose.traefik.enable,
-				compose.traefik.trustForwardHeader,
 				("traefik.docker.network", network),
-				("traefik.frontend.auth.forward.authResponseHeaders", "X-Forwarded-User"),
 				("traefik.frontend.headers.customFrameOptionsValue", compose.traefik.customFrameOptionsValue),
 				("traefik.frontend.headers.customResponseHeaders", compose.traefik.customResponseHeadersValue),
 				compose.traefik.forceStsHeader,
@@ -53,8 +50,8 @@ class OauthProxy(object):
 				compose.traefik.stsSeconds,
 				compose.traefik.passHostHeader,
 				("traefik.frontend.headers.SSLHost", compose.traefik.parsePrimarySubdomain()),
-				("traefik.frontend.rule", ("Host", subdomains)),
-				("traefik.port", oauthPort),
+				("traefik.frontend.rule", f"Host:{subdomains}"),
+				("traefik.port", compose.traefik.oauthPort),
 				("traefik.protocol", self.schema),
 				])
 		self.networks = list(dict.fromkeys([
@@ -92,12 +89,12 @@ class OauthProxy(object):
 				f"--authenticated-emails-file={compose.authenticatedEmailsContainerPath}",
 				f"--client-id={self.clientIdEnviron}",
 				f"--client-secret-file=/run/secrets/{self.secrets[1]}",
-				f"--cookie-domain={compose.domain}",
+				#f"--cookie-domain={compose.domain}",
 				f"--cookie-expire={cookieExpiration}h",
 				f"--cookie-httponly=false",
 				f"--cookie-refresh={cookieRefreshInerval}h",
 				f"--email-domain={emailDomain}",
-				f"--http-address=http://0.0.0.0:{compose.oauth_port}",
+				f"--http-address=http://0.0.0.0:{compose.traefik.oauthPort}",
 				f"--provider={self.provider}",
 				f"--redirect-url=https://{compose.traefik.parsePrimarySubdomain()}",
 				f"--request-logging=false",
@@ -110,8 +107,8 @@ class OauthProxy(object):
 				str(self.container_name): {
 						"image":                self.image,
 						"secrets":              self.secrets,
-						"container_name":       self.container_name,
-						"hostname":             self.container_name,
+						#"container_name":       self.container_name,
+						#"hostname":             self.container_name,
 						str(self.env.fileName): self.env.files,
 						"networks":             self.networks,
 						"labels":               self.labels,
@@ -123,8 +120,7 @@ class OauthProxy(object):
 				str(self.container_name): {
 						"image":                self.image,
 						"secrets":              self.secrets,
-						"container_name":       self.container_name,
-						"hostname":             self.container_name,
+						#"container_name":       self.container_name,
 						str(self.env.fileName): self.env.files,
 						"network_mode":         f"service:{compose.vpnContainerName}",
 						"labels":               self.labels,
