@@ -1,8 +1,8 @@
-import src.generators
+from classes.environment import Environs
 from classes.oauth import OauthProxy
 from classes.traefik import Traefik
 from src.formatting import formatString
-from src.gets import getServiceHostname, set_config_directory
+from src.gets import getServiceHostname
 from src.parser import parseImage
 from src.sets import setItems
 
@@ -48,7 +48,7 @@ class IP(object):
 
 def combineLocalSecrets(v):
 	items = ([x for x in v["Secrets"]] if "Secrets" in v else []) + ['puid', 'pgid']
-	payload = listCleanup(items)
+	payload = list(dict.fromkeys(items))
 	return payload
 
 
@@ -69,7 +69,10 @@ class ComposeFile(object):
 	             puid = str(1001),
 	             pgid = str(1001),
 	             version = 3.7,
-	             frontendIP = "192.168.80"):
+	             frontendIP = "192.168.80",
+	             openVpnName = "openvpn",
+	             subnetStart = 225):
+		self.oauthService = None
 		self.networks = dict()
 		self.stackDict = stackDict
 		self.defaults = defaults
@@ -101,9 +104,10 @@ class ComposeFile(object):
 		self.globals.update({ "networks": IP(self.defaults, self.globalValues, self.stackDict).networks })
 		self.globals.update({ "secrets": self.secrets })
 		self.globals.update({ "volumes": dict() })
-		self.globals["volumes"].update(
-				{ vol: { "external": bool(True) } for vol in self.stackDict["Volumes"] } if self.conditionals[
-					"Volumes"] else dict())
+		self.globals["volumes"].update({ vol: { "external": bool(True) } \
+		                                 for vol in self.stackDict["Volumes"] } \
+			                               if self.conditionals["Volumes"] \
+			                               else dict())
 		self.globals.update(IP(self.defaults, self.globalValues, self.stackDict).networks)
 		self.ip = str(IP(self.defaults, self.globalValues, self.stackDict).address)
 		self.frontendIP = frontendIP
@@ -112,16 +116,17 @@ class ComposeFile(object):
 		self.authenticatedEmailsFile = str(authenticatedEmailsFile)
 		self.authenticatedEmailsContainerPath = str(authenticatedEmailsContainerPath)
 		self.backend_subnet = str(IP(self.defaults, self.globalValues, self.stackDict).backendSubnet)
-		i = int()
-		for k, v in setItems(self, "Services", self.stackDict, dict()).items():
-			i += 1
+		# i = int()
+		for index, (k, v) in enumerate(setItems(self, "Services", self.stackDict, dict()).items()):
 			self.local_volumes = list()
-			self.fourthOctet = 255 - i
+			# add logic to loop the octet backwards when hitting 0 along with knowing what numbers are network /
+			# broadcast addresses
+			self.fourthOctet = subnetStart - index
 			self.stackTitle = formatString(stackTitle)
 			k = formatString(k)
 			self.vpnContainerName = formatString('-'.join([self.stackTitle, "pia-openvpn"]).lower())
 			# bandage fix make dynamic
-			if "openvpn" in k:
+			if openVpnName in k:
 				k = self.vpnContainerName
 			self.services.update({ k: dict() })
 			self.globals.update({ "services": self.services })
@@ -135,23 +140,13 @@ class ComposeFile(object):
 			self.setConditionals(v)
 			self.setLocalVolumes(k, v)
 			self.ports = list()
-			self.envFile = { "env_file": listCleanup(["globals.env", f"{k}.env"]) }
-			self.services[k].update(self.envFile)
+			self.environment = Environs(k, v, self)
+			self.services[k].update(self.environment.obj)
 			self.dns = ["8.8.8.8", "8.8.4.4"]
-			# TODO: all traefik stuff should be in this class or a subclass
-			
-			## INIT SERVICE DICT
-			# self.setHealthcheck(k)
-			# self.setLogging(k)
 			self.local_secrets = combineLocalSecrets(v)
 			self.puid = str(int(setItems(self, "PUID", self.defaults, puid)))
 			self.pgid = str(int(setItems(self, "PGID", self.defaults, pgid)))
 			self.services[k].update({ "container_name": k })
-			path = set_config_directory(self.stackTitle)
-			self.environment = v["Environment"] if "Environment" in v else dict()
-			src.generators.gen_app_specific_env_file(path, k, self.environment)
-			
-			## END SERVICE INIT
 			self.services[k].update(parseImage(v))
 			self.services[k].update(self.parseLocalSecrets(v))
 			v["secrets"] = self.services[k]['secrets']
@@ -159,98 +154,91 @@ class ComposeFile(object):
 			self.labels = self.parseLabels(v)
 			if self.conditionals["Entrypoint"]:
 				self.services[k].update({ "entrypoint": v["Entrypoint"] })
-			# consider revising these as cap adjustments do not work as they should from the looks of it
-			self.parseList(k, v, "cap_add")
-			self.parseList(k, v, "cap_drop")
-			self.parseList(k, v, "sysctls")
-			# working on the oauth object
-			self.parseList(k, v, "depends_on")
+			
+			# make sure this works
+			[self.parseList(k, v, x) for x in ["cap_add", "cap_drop", "sysctls", "depends_on"]]
+			
 			self.setNetworking(k, v)
-			self.traefikLabels = Traefik(self,
-			                             self.ports,
-			                             self.globalValues,
-			                             k,
-			                             v)
-			if "network_mode" in self.services[k]:
-				if not "depends_on" in self.services[k]:
-					self.services[k].update({ "depends_on": list() })
-				self.services[k]["depends_on"].append(self.vpnContainerName)
-			if k.lower() == "depends_on" and k in self.services[k]["depends_on"]:
-				self.services[k]["depends_on"].remove(k)
+			self.traefik = Traefik(self,
+			                       self.ports,
+			                       self.globalValues,
+			                       k,
+			                       v)
 			self.setCommands(k, v)
 			
-			if (not self.traefikLabels.subdomains) or (
-					self.conditionals["proxy_secrets"] or self.conditionals["oauth"]):
+			if ((not self.traefik.subdomains) or (
+					self.conditionals["proxy_secrets"] or self.conditionals["oauth"])) and "vpn" not in v:
 				try:
 					del self.networks["networks"]["frontend"]
-				except KeyError:
+				except (KeyError, TypeError):
 					pass
 			## SETS DNS
-			if self.conditionals["DNS"] and "vpn" not in v:
-				self.dns = [v["DNS"]]
-				## SETS DOMAIN NAME
+			if "vpn" not in v:
+				if self.conditionals["DNS"]:
+					self.dns = [v["DNS"]]
 				self.services[k].update({ "domainname": self.domain })
-			if self.combinedConditionals["frontend_no_oauth"]:
-				self.labels = listCleanup([label for label in self.traefikLabels.labels + self.labels])
 				try:
-					self.services[k].update({ "dns_search": listCleanup(self.traefikLabels.subdomains) })
-					self.services[k].update({ "dns": listCleanup(self.dns) })
-				except KeyError:
+					self.services[k].update({ "dns_search": list(dict.fromkeys(self.traefik.subdomains)) })
+					self.services[k].update({ "dns": list(dict.fromkeys(self.dns)) })
+				except (KeyError, TypeError):
 					pass
+			if self.combinedConditionals["frontend_no_oauth"]:
+				self.labels.update(self.traefik.labels)
 			if self.conditionals["oauth"] or self.conditionals["proxy_secrets"]:
 				self.services.update(OauthProxy(k, self).obj)
 			else:
 				try:
-					self.services[k].update({ "labels": listCleanup(self.labels) })
-				except KeyError:
+					self.services[k].update({ "labels": self.labels })
+				except (KeyError, TypeError):
 					pass
-			# not sure this is going through
-			
-			# TODO: clean up replace statement in a better way
-			
-			# conditionals - move to a separate class down the line
+			if "network_mode" in self.services[k]:
+				if not "depends_on" in self.services[k]:
+					self.services[k].update({ "depends_on": list() })
+				self.services[k]["depends_on"].append(self.vpnContainerName)
+				for i in ["dns", "dns_search", "domainname"]:
+					try:
+						del self.services[k][i]
+					except (KeyError, TypeError):
+						pass
+			if k.lower() == "depends_on" and k in self.services[k]["depends_on"]:
+				self.services[k]["depends_on"].remove(k)
+			if k == self.vpnContainerName:
+				self.services[k]["networks"].update({"frontend": dict()})
 			try:
 				self.dictCleanup(k)
-			except KeyError:
+			except (KeyError, TypeError):
 				pass
 	
-		# handles oauth for external services probably shouldnt do this this way
-		# for k, v in externalServers.items():
-		# 	if v["oauth"] and v["stack"] == self.stackTitle:
-		# 		self.services.update(OauthProxy(k, self, True).obj)
-	
 	def parseLabels(self, v):
-		return listCleanup([x for x in v["labels"]] if "labels" in v else list())
+		return {x for x in v["labels"]} if "labels" in v else dict()
 	
 	def dictCleanup(self, k):
 		self.removeEmptyDict(k, "labels")
 		self.removeEmptyDict(k, "volumes")
 		if "volumes" in self.globals and not self.globals["volumes"]:
 			del self.globals["volumes"]
-		# resets value may be depricatable
 		self.local_secrets = list()
 	
 	def setCommands(self, k, v):
 		if self.conditionals["Commands"]:
 			payload = v["Commands"]
-			self.services[k].update({ str("command"): listCleanup(payload) })
+			self.services[k].update({ "command": list(dict.fromkeys(payload)) })
 	
 	def setNetworking(self, k, v):
 		if self.conditionals["ports"]:
 			self.ports = v["ports"]
 		if self.conditionals["vpn"]:
-			self.services[k].update({ "network_mode": f"service:{self.vpnContainerName}" })
+			self.services[k].update({ "network_mode": ":".join(["service", self.vpnContainerName]) })
 		else:
 			self.services[k].update(getServiceHostname(k))
 			if not self.conditionals["mask_ports"]:
 				if self.ports.__len__() > 0:
 					self.services[k].update({ "ports": self.ports })
-			# self.networks = { "networks": ["backend", "frontend"] }
 			self.services[k].update(self.networks)
 	
 	def setLocalVolumes(self, k, v):
 		self.local_volumes = [vol for vol in v["Volumes"]] if ("Volumes" in v and v["Volumes"]) else []
-		self.services[k].update({ "volumes": listCleanup(self.local_volumes) })
+		self.services[k].update({ "volumes": list(dict.fromkeys(self.local_volumes)) })
 	
 	def setPrivs(self, k):
 		if self.conditionals["privileged"]:
@@ -277,52 +265,6 @@ class ComposeFile(object):
 			logging["options"].update({ "max-size": str("200k") })
 			logging["options"].update({ "max-file": str(10) })
 			self.services[k].update({ "logging": logging })
-		
-		# def buildOauthObject(self, k):
-		# 	# TODO: - logic can be improved here to remove the oauth secrets completely from the base
-		# 	# TODO: make all oauth file reads rather or come from vault
-		# 	oauthCommands = self.oauthService.commands
-		# 	self.proxy_networks = {
-		# 			"networks": {
-		# 					"backend":  { "ipv4_address": f"{self.ip}.{self.fourthOctet - 150}" },
-		# 					"frontend": dict()  # { "ipv4_address": f"{self.frontendIP}.{self.fourthOctet - 150}" }
-		# 					}
-		# 			}
-		# 	## APPEND SERVICE OAUTH LABEL
-		# 	self.services[self.oauthService.container_name]["labels"] = listCleanup([x for x in
-		# 	self.traefikLabels.labels])
-		# 	self.services[self.oauthService.container_name].update(
-		# 			{ "labels": listCleanup(self.services[self.oauthService.container_name]["labels"]) })
-		# 	self.services[self.oauthService.container_name].update({ "container_name":
-		# 	self.oauthService.container_name })
-		# 	# self.services[self.oauthService.container_name].update({ "hostname": self.oauthService.container_name })
-		# 	self.services[self.oauthService.container_name].update({ "image": self.oauthService.image })
-		# 	self.services[self.oauthService.container_name].update({ "secrets": listCleanup(self.local_secrets) })
-		# 	self.services[self.oauthService.container_name].update({
-		# 			"env_file": listCleanup(["globals.env",
-		# 			                         f"{k}.env"])
-		# 			})
-		# 	#self.services[self.oauthService.container_name].update({ "volumes": [authenticatedEmails] })
-		# 	self.services[self.oauthService.container_name].update({ "user": f"{self.puid}:{self.pgid}" })
-		# 	self.services[self.oauthService.container_name].update(self.proxy_networks)
-		# 	# self.services[self.oauthService.container_name].update({ "networks": listCleanup(["frontend",
-		# 	"backend"]) })
-		# 	self.services[self.oauthService.container_name].update(
-		# 			{ "dns_search": listCleanup(self.traefikLabels.subdomains) })
-		# 	self.services[self.oauthService.container_name].update({ "dns": listCleanup(self.dns) })
-		# 	self.services[self.oauthService.container_name].update({ "depends_on": [k] })
-		# 	self.services[self.oauthService.container_name].update({ "restart": "always" })
-		# 	self.services[self.oauthService.container_name].update({ "command": listCleanup(oauthCommands) })
-		if "network_mode" in self.services[self.oauthService.container_name]:
-			if not "depends_on" in self.services[self.oauthService.container_name]:
-				self.services[self.oauthService.container_name].update({ "depends_on": list() })
-			self.services[self.oauthService.container_name]["depends_on"].append(self.vpnContainerName)
-	
-	def globalVolumes(self):
-		payload = dict()
-		if "Volumes" in self.stackDict and self.stackDict["Volumes"]:
-			payload = listCleanup(self.stackDict["Volumes"])
-		return payload
 	
 	def removeEmptyDict(self, k, environ):
 		if environ in self.services[k] and not self.services[k][environ]:
@@ -342,18 +284,12 @@ class ComposeFile(object):
 				{ "vpn": (("networks" in v) and ("vpn" in v["networks"]) and (v["networks"]["vpn"]) or "vpn" in v) })
 		self.conditionals.update({ "mask_ports": ("mask_ports" in v and v["mask_ports"]) })
 		self.conditionals.update({ "DNS": ("DNS" in v and v["DNS"]) })
-		# self.conditionals.update({ "healthcheck": ("healthcheck" in v and v["healthcheck"]) })
-		# self.conditionals.update({ "logging": ("logging" in v and v["logging"]) })
 		self.conditionals.update({ "Commands": ("Commands" in v and v["Commands"]) })
-		self.combinedConditionals.update(
-				{
-						"frontend_no_oauth":
-							(
-									not self.conditionals["oauth"] and
-									self.conditionals["ports"] and
-									self.conditionals["subdomains"])
-						}
-				)
+		self.combinedConditionals.update({
+				"frontend_no_oauth": (not self.conditionals["oauth"] \
+				                      and self.conditionals["ports"] \
+				                      and self.conditionals["subdomains"])
+				})
 	
 	def parseList(self, name, container, environ):
 		if environ in container and container[environ]:
@@ -364,28 +300,7 @@ class ComposeFile(object):
 		if "secrets" in v:
 			self.local_secrets = [secret for secret in v["secrets"]] if "secrets" in v else [self.secrets.keys()]
 		# add conditional change to not be in place if network mode is toggled
-		payload = { "secrets": listCleanup(self.local_secrets) }
-		return payload
-	
-	def setOauthProxyFlags(self, name):
-		payload = bool()
-		if self.conditionals["oauth"] or self.conditionals["proxy_secrets"]:
-			payload = str(bool(True)).lower()
-			base = f"{self.secretsPath}/{name}/OAUTH2_PROXY_"
-			# adds to global secrets
-			self.secrets.update({ f"{name}_proxy_client_id": { "file": f"{base}CLIENT_ID.secret" } })
-			self.secrets.update({ f"{name}_proxy_client_secret": { "file": f"{base}CLIENT_SECRET.secret" } })
-			self.secrets.update({ f"{name}_proxy_cookie_secret": { "file": f"{base}COOKIE_SECRET.secret" } })
-		# secrets per service
-		# self.local_secrets += [
-		# 		f"{name}_proxy_client_id",
-		# 		f"{name}_proxy_client_secret",
-		# 		f"{name}_proxy_cookie_secret",
-		# 		]
-		return payload
-	
-	def setVPNHostname(self, vpn = 'pia-openvpn'):
-		payload = '-'.join([self.stackTitle.lower(), vpn])
+		payload = { "secrets": list(dict.fromkeys(self.local_secrets)) }
 		return payload
 	
 	def parseOrganizrFQDN(self):
@@ -400,13 +315,3 @@ class ComposeFile(object):
 		elif self.ports:
 			port = str(self.ports[0]).split(":")[1]
 		return int(port)
-
-
-def listCleanup(x):
-	return list(dict.fromkeys(x))
-
-
-def listToDict(x):
-	y = iter(x)
-	res_dct = dict(zip(y, y))
-	return res_dct

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3.7
+from random import randrange as rand
+
 from src.formatting import formatString
 from src.sets import setItems
 
@@ -14,8 +16,19 @@ class Traefik(object):
 	             backendNetwork = "backend",
 	             organizrSubdomain = "home",
 	             customResponseHeaders = dict(),
-	             traefikProtocol = "http"
+	             oauthPort = 4183
 	             ):
+		self.oauthPort = rand(23700, 23900) # historic default is 4180, went ephemeral here
+		self.passHostHeader = ("traefik.frontend.passHostHeader", True)
+		self.stsSeconds = ("traefik.frontend.headers.STSSeconds", 315360000)
+		self.stsPreload = ("traefik.frontend.headers.STSPreload", True)
+		self.stsIncludeSubdomains = ("traefik.frontend.headers.STSIncludeSubdomains", True)
+		self.sslRedirect = ("traefik.frontend.headers.SSLRedirect", True)
+		self.trustForwardHeader = ("traefik.frontend.auth.forward.trustForwardHeader", True)
+		self.sslForceHost = ("traefik.frontend.headers.SSLForceHost", True)
+		self.frameDeny = ("traefik.frontend.headers.frameDeny", bool())
+		self.forceStsHeader = ("traefik.frontend.headers.forceSTSHeader", True)
+		self.enable = ("traefik.enable", True)
 		self.compose = compose
 		self.frontendNetwork = formatString(setItems(self,
 		                                             "Networks",
@@ -28,7 +41,7 @@ class Traefik(object):
 		                                            backendNetwork,
 		                                            1))
 		self.organizrURL = f"{organizrSubdomain}.{compose.domain}"
-		self.labels = list()
+		self.labels = dict()
 		self.service = str(service)
 		self.oauthService = f"{service}-proxy"
 		self.backendLabel = self.service if not (self.compose.conditionals["oauth"] or self.compose.conditionals[
@@ -36,17 +49,19 @@ class Traefik(object):
 		self.serviceItems = serviceItems
 		self.subdomains = self.setSubdomains()
 		self.ports = str(80) if not ports else ports
-		self.protocol = traefikProtocol
+		self.protocol = "http" if (str(self.ports) != str(443)) or (self.service != "nextcloud") else "https"
 		self.customResponseHeaders = setCustomResponseHeader(customResponseHeaders)
 		self.customResponseHeadersValue = self.parseCustomResponseHeader()
 		self.customFrameOptionsValue = self.parseCustomFrameOptionsValue()
+		self.backend = ("traefik.backend", self.backendLabel)
+		self.network = ("traefik.docker.network", "frontend")
 		self.set()
 	
 	def setSubdomains(self):
 		subdomains = list()
 		if "subdomains" in self.serviceItems and self.serviceItems["subdomains"]:
 			subdomains = [".".join([sub, self.compose.domain]) for sub in self.combineSubdomains()]
-		payload = listCleanup(subdomains)
+		payload = list(dict.fromkeys(subdomains))
 		return payload
 	
 	def combineSubdomains(self):
@@ -54,46 +69,36 @@ class Traefik(object):
 		return payload
 	
 	def set(self):
-		initSubdomains = listCleanup(self.subdomains)
-		subdomains = str(",".join(initSubdomains))
+		subdomains = str(",".join(list(dict.fromkeys(self.subdomains))))
 		port = self.compose.parsePort(self.service)
 		if self.compose.conditionals["oauth"] or self.compose.conditionals["proxy_secrets"]:
-			port = self.compose.oauth_port
-		self.labels = self.setLabels(port, subdomains)
-	
-	def setLabels(self, port, subdomains):
-		payload = [
-				f"traefik.backend={self.backendLabel}",
-				f"traefik.docker.network=frontend",
-				f"traefik.enable={str(bool(True)).lower()}",
-				f"traefik.frontend.headers.browserXSSFilter={str(bool(True)).lower()}",
-				f"traefik.frontend.headers.contentTypeNosniff={str(bool(True)).lower()}",
-				f"traefik.frontend.headers.customResponseHeaders={self.customResponseHeadersValue}",
-				f"traefik.frontend.headers.forceSTSHeader={str(bool(True)).lower()}",
-				f"traefik.frontend.headers.frameDeny={str(bool(True)).lower()}",
-				f"traefik.frontend.headers.SSLForceHost={str(bool(True)).lower()}",
-				f"traefik.frontend.headers.SSLRedirect={str(bool(True)).lower()}",
-				f"traefik.frontend.headers.STSIncludeSubdomains={str(bool(True)).lower()}",
-				f"traefik.frontend.headers.STSPreload={str(bool(True)).lower()}",
-				f"traefik.frontend.headers.STSSeconds=315360000",
-				f"traefik.frontend.passHostHeader={str(bool(True)).lower()}",
-				f"traefik.protocol={self.protocol}",
-				f"traefik.{self.service}.frontend.headers.customFrameOptionsValue={self.customFrameOptionsValue}",
-				f"traefik.{self.service}.frontend.headers.SSLHost={self.parsePrimarySubdomain()}",
-				f"traefik.{self.service}.frontend.rule=Host:{subdomains}",
-				f"traefik.{self.service}.port={port}",
-				# f"traefik.frontend.headers.customFrameOptionsValue={self.customFrameOptionsValue}",
-				# f"traefik.frontend.headers.SSLHost={self.parsePrimarySubdomain()}",
-				# f"traefik.frontend.rule=Host:{subdomains}",
-				# f"traefik.port={port}",
-				]
-		return listCleanup(payload)
+			port = self.oauthPort
+		self.labels = dict([self.backend,
+		                    self.network,
+		                    self.enable,
+		                    ("traefik.frontend.headers.customFrameOptionsValue", self.customFrameOptionsValue),
+		                    ("traefik.frontend.headers.customResponseHeaders", self.customResponseHeadersValue),
+		                    self.forceStsHeader,
+		                    self.frameDeny,
+		                    self.sslForceHost,
+		                    ("traefik.frontend.headers.SSLHost", self.parsePrimarySubdomain()),
+		                    self.sslRedirect,
+		                    self.stsIncludeSubdomains,
+		                    self.stsPreload,
+		                    self.stsSeconds,
+		                    self.passHostHeader,
+		                    ("traefik.frontend.rule", f"Host:{subdomains}"),
+		                    ("traefik.port", port),
+		                    ("traefik.protocol", self.protocol)])
+		# bandage fix should be a better way
+		if self.service == "nextcloud":
+			self.labels["traefik.protocol"] = "https"
+			self.labels["traefik.frontend.redirect.regex"] = "https://(.*)/.well-known/(card|cal)dav"
+			self.labels["traefik.frontend.redirect.replacement"] = "https://$$1/remote.php/dav/"
 	
 	def parseCustomFrameOptionsValue(self):
-		urls = [f"https://{url}" for url in self.subdomains]
-		urls.append(f"https://{self.organizrURL}")
-		allowFrom = f"'allow-from {str(','.join(listCleanup(urls)))}'"
-		payload = ",".join(["SAMEORIGIN", allowFrom])
+		urls = ["SAMEORIGIN", f"https://{self.organizrURL}"]
+		payload = f"allow-from {str(','.join(list(dict.fromkeys(urls))))}"
 		return payload
 	
 	def parsePort(self, service, port = 80):
@@ -101,12 +106,10 @@ class Traefik(object):
 			port = 32400
 		elif self.ports:
 			port = str(self.ports[0]).split(":")[1]
-		if port == (443 or str(443)) or (self.service == "nextcloud"):
-			self.protocol = "https"
 		return int(port)
 	
 	def parseCustomResponseHeader(self):
-		payload = ",".join(listCleanup([f"{k}:{','.join(v)}" for k, v in self.customResponseHeaders.items()]))
+		payload = ",".join(list(dict.fromkeys([f"{k}:{','.join(v)}" for k, v in self.customResponseHeaders.items()])))
 		return payload
 	
 	def parsePrimarySubdomain(self):
@@ -120,10 +123,18 @@ class Traefik(object):
 def setCustomResponseHeader(customResponseHeaders):
 	payload = {
 			"X-Robots-Tag": ["noindex", "nofollow", "nosnippet", "noarchive", "notranslate", "noimageindex", "none"]
+			# "Feature-Policy:camera": None,
+			# "fullscreen":None,
+			# "geolocation": None,
+			# "microphone": None,
+			# "payment": None,
+			# "speaker": None,
+			# "usb": None,
+			# "vibrate": None,
+			# "vr": None,
+	        #   #||server:''||X-Powered-By:''"
 			}
+	
+	
 	customResponseHeaders.update(payload)
 	return customResponseHeaders
-
-
-def listCleanup(x):
-	return list(dict.fromkeys(x))
