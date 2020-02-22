@@ -48,13 +48,13 @@ def gen_master_stack_file(payload):
 	json.dump(payload, f, ensure_ascii = False, indent = 4)
 
 
-def gen_setup_shell_script(stack, app, defaults, globals, configs):
+def gen_setup_shell_script(stack, app, defaults, g, configs):
 	stack_group = str(stack).lower().replace(" ", "_")
 	p = f"{configs}/setup.sh"
 	t = load_template('SHELL_SCRIPT')
 	f = open(Path(p), "w+")
 	print(f"Creating stack configuration: {p}")
-	render = t.render(stack_group = stack_group, service = app, defaults = defaults, globals = globals)
+	render = t.render(stack_group = stack_group, service = app, defaults = defaults, globals = g)
 	f.write(render)
 
 
