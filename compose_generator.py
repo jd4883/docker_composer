@@ -24,7 +24,7 @@ if __name__ == "__main__":
 	for stack in file['Stack Group Name']:
 		composeFile = ComposeFile(file['Defaults']['Domain'],
 		                          stack,
-		                          file["Defaults"]["Email Authentication File"],
+		                          file["Defaults"]["Authenticated Emails File"],
 		                          file["Defaults"]["Email"],
 		                          file['Stack Group Name'][stack],
 		                          file['Defaults'],
