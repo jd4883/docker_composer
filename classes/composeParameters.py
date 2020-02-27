@@ -1,11 +1,13 @@
+import re
+
+import classes.traefik
 from classes.environment import Environs
 from classes.oauth import OauthProxy
-from classes.traefik import Traefik
 from src.formatting import formatString
 from src.gets import getServiceHostname
 from src.parser import parseImage
 from src.sets import setItems
-import re
+
 
 class IP(object):
 	def __init__(self,
@@ -151,31 +153,30 @@ class ComposeFile(object):
 			self.puid = str(int(setItems(self, "PUID", self.defaults, puid)))
 			self.pgid = str(int(setItems(self, "PGID", self.defaults, pgid)))
 			self.services[k].update({ "container_name": k })
-			self.services[k].update(parseImage(v))
 			self.services[k].update(self.parseLocalSecrets(v))
 			v["secrets"] = self.services[k]['secrets']
 			self.setPrivs(k)
 			self.labels = parseLabels(v)
 			if self.conditionals["Entrypoint"]:
 				self.services[k].update({ "entrypoint": v["Entrypoint"] })
-			
-			# make sure this works
-			[self.parseList(k, v, x) for x in ["cap_add", "cap_drop", "sysctls", "depends_on"]]
-			
+				[self.parseList(k, v, x) for x in ["cap_add", "cap_drop", "sysctls", "depends_on"]]
 			self.setNetworking(k, v)
-			self.traefik = Traefik(self,
-			                       self.ports,
-			                       self.globalValues,
-			                       k,
-			                       v)
+			self.traefik = classes.traefik.Traefik(self,
+			                                       self.ports,
+			                                       self.globalValues, k, v)
 			self.setCommands(k, v)
-			
-			if ((not self.traefik.subdomains)
-			    or (self.conditionals["proxy_secrets"]
-			        or self.conditionals["oauth"])) \
+			# expand this out into a much better more robust version of build
+			# likely this approach will work for almost every resource type as a cleaner way to do this
+			# TODO: add logic to put image here and not in its other location
+			# really fragile right now as context must also be defined
+			if (("build" in v and v["build"]) and ("args" in v["build"] and v["build"]["args"])):
+				self.services[k].update({ "build": { "args": v["build"]["args"] } })
+				self.services[k]["build"].update({ "context": v["build"]["context"]  })
+			self.services[k].update(parseImage(v))
+			if (not (not (not self.traefik.subdomains)
+			         and not (self.conditionals["proxy_secrets"] or self.conditionals["oauth"]))) \
 					and not re.match('(?i)plex.linker', k) \
 					and not re.match(f'(?i){self.vpnContainerName}', k):
-				
 				try:
 					del self.networks["networks"]["frontend"]
 				except (KeyError, TypeError):
