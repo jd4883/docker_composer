@@ -28,7 +28,8 @@ class OauthProxy(object):
 			self.env.gen_app_specific_env_file(path, self.service, self.environment)
 		self.dns = compose.dns
 		self.dns_search = compose.traefik.subdomains
-		self.image_name = "quay.io/pusher/oauth2_proxy"
+		self.image_name = "skippy/oauth2_proxy"
+		#self.image_name = "quay.io/pusher/oauth2_proxy"
 		self.image_tag = "v3.2.0"
 		# v3.2.0 is needed due to a cookie reading bug with pusher's OAUTH in the latest build
 		#self.image_tag = "latest"
@@ -90,7 +91,9 @@ class OauthProxy(object):
 		
 		self.commands = list(dict.fromkeys([
 				f"--authenticated-emails-file=/authenticated-emails.txt",
-				#f"--client-id={self.clientIdEnviron}",
+				f"--client-id={self.clientIdEnviron}",
+				f"--client-secure=false",
+				f"--email-domain=gmail.com",
 				#f"--client-secret-file=/run/secrets/{self.secrets[1]}",
 				# f"--cookie-domain={compose.domain}",
 				f"--cookie-expire={cookieExpiration}h",
@@ -100,7 +103,7 @@ class OauthProxy(object):
 				f"--provider={self.provider}",
 				f"--redirect-url=https://{compose.traefik.parsePrimarySubdomain()}",
 				f"--request-logging=false",
-				#f"--ssl-upstream-insecure-skip-verify=true",
+				f"--ssl-insecure-skip-verify=true",
 				f"--upstream={self.upstream}",
 				]))
 		
