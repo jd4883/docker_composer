@@ -29,7 +29,9 @@ class OauthProxy(object):
 		self.dns = compose.dns
 		self.dns_search = compose.traefik.subdomains
 		self.image_name = "quay.io/pusher/oauth2_proxy"
-		self.image_tag = "latest"
+		self.image_tag = "v5.0.0"
+		# v5.0.0 is needed due to a cookie reading bug with pusher's OAUTH in the latest build
+		#self.image_tag = "latest"
 		self.image = ":".join([self.image_name, self.image_tag])
 		subdomains = str(",".join(list(dict.fromkeys(compose.traefik.subdomains))))
 		self.schema = "http" if (
@@ -90,7 +92,6 @@ class OauthProxy(object):
 				f"--authenticated-emails-file=/authenticated-emails.txt",
 				f"--client-id={self.clientIdEnviron}",
 				f"--client-secret-file=/run/secrets/{self.secrets[1]}",
-				f"--cookie-secure=false",
 				# f"--cookie-domain={compose.domain}",
 				f"--cookie-expire={cookieExpiration}h",
 				f"--cookie-httponly=false",
