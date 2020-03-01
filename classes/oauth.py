@@ -100,7 +100,7 @@ class OauthProxy(object):
 				f"--provider={self.provider}",
 				f"--redirect-url=https://{compose.traefik.parsePrimarySubdomain()}",
 				f"--request-logging=false",
-				f"--ssl-upstream-insecure-skip-verify=true",
+				#f"--ssl-upstream-insecure-skip-verify=true",
 				f"--upstream={self.upstream}",
 				]))
 		
