@@ -29,8 +29,8 @@ class OauthProxy(object):
 		self.dns = compose.dns
 		self.dns_search = compose.traefik.subdomains
 		self.image_name = "quay.io/pusher/oauth2_proxy"
-		self.image_tag = "v4.1.0"
-		# v4.1.0 is needed due to a cookie reading bug with pusher's OAUTH in the latest build
+		self.image_tag = "v3.2.0"
+		# v3.2.0 is needed due to a cookie reading bug with pusher's OAUTH in the latest build
 		#self.image_tag = "latest"
 		self.image = ":".join([self.image_name, self.image_tag])
 		subdomains = str(",".join(list(dict.fromkeys(compose.traefik.subdomains))))
