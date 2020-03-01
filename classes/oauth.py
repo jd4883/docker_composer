@@ -92,7 +92,7 @@ class OauthProxy(object):
 		self.commands = list(dict.fromkeys([
 				f"--authenticated-emails-file=/authenticated-emails.txt",
 				f"--client-id={self.clientIdEnviron}",
-				f"--client-secure=false",
+				f"--cookie-secure=false",
 				f"--email-domain=gmail.com",
 				#f"--client-secret-file=/run/secrets/{self.secrets[1]}",
 				# f"--cookie-domain={compose.domain}",
