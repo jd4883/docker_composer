@@ -90,7 +90,7 @@ class OauthProxy(object):
 				f"--authenticated-emails-file=/authenticated-emails.txt",
 				f"--client-id={self.clientIdEnviron}",
 				f"--client-secret-file=/run/secrets/{self.secrets[1]}",
-				f"--client-secure=false",
+				f"--cookie-secure=false",
 				# f"--cookie-domain={compose.domain}",
 				f"--cookie-expire={cookieExpiration}h",
 				f"--cookie-httponly=false",
