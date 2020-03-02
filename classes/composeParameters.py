@@ -182,7 +182,7 @@ class ComposeFile(object):
 				except (KeyError, TypeError):
 					pass
 			## SETS DNS
-			if "vpn" not in v:
+			if "vpn" not in v or self.vpnContainerName  == k:
 				if self.conditionals["DNS"]:
 					self.dns = [v["DNS"]]
 				self.services[k].update({ "domainname": self.domain })
@@ -208,10 +208,11 @@ class ComposeFile(object):
 					self.services[k].update({ "depends_on": list() })
 				self.services[k]["depends_on"].append(self.vpnContainerName)
 				for i in ["dns", "dns_search", "domainname"]:
-					try:
-						del self.services[k][i]
-					except (KeyError, TypeError):
-						pass
+					if k != self.vpnContainerName:
+						try:
+							del self.services[k][i]
+						except (KeyError, TypeError):
+							pass
 			if k.lower() == "depends_on" and k in self.services[k]["depends_on"]:
 				self.services[k]["depends_on"].remove(k)
 			try:
