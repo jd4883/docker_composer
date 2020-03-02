@@ -203,12 +203,12 @@ class ComposeFile(object):
 				except (KeyError, TypeError):
 					pass
 			self.services[k]["restart"] = "on-failure"
-			if "network_mode" in self.services[k]:
+			if "network_mode" in self.services[k] and "vpn" not in k:
 				if not "depends_on" in self.services[k]:
 					self.services[k].update({ "depends_on": list() })
 				self.services[k]["depends_on"].append(self.vpnContainerName)
-				for i in ["dns", "dns_search", "domainname"]:
-					if k != self.vpnContainerName:
+				if "vpn" not in k:
+					for i in ["dns", "dns_search", "domainname"]:
 						try:
 							del self.services[k][i]
 						except (KeyError, TypeError):
@@ -219,6 +219,8 @@ class ComposeFile(object):
 				self.dictCleanup(k)
 			except (KeyError, TypeError):
 				pass
+			if "vpn" in k or k is self.vpnContainerName:
+				self.services[k].update({ "dns": self.dns })
 	
 	def dictCleanup(self, k):
 		self.removeEmptyDict(k, "labels")
