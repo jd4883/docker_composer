@@ -28,7 +28,8 @@ class OauthProxy(object):
 			self.env.gen_app_specific_env_file(path, self.service, self.environment)
 		self.dns = compose.dns
 		self.dns_search = compose.traefik.subdomains
-		self.image_name = "quay.io/pusher/oauth2_proxy"
+		self.image_name = "skippy/oauth2_proxy"
+		#self.image_name = "quay.io/pusher/oauth2_proxy"
 		self.image_tag = "latest"
 		self.image = ":".join([self.image_name, self.image_tag])
 		subdomains = str(",".join(list(dict.fromkeys(compose.traefik.subdomains))))
