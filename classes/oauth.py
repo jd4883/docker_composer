@@ -114,6 +114,8 @@ class OauthProxy(object):
 						"image":                self.image,
 						"secrets":              self.secrets,
 						str(self.env.fileName): self.env.files,
+						"dns":                  self.dns,
+						"dns_search":           self.dns_search,
 						"networks":             self.networks,
 						"labels":               self.labels,
 						"volumes":              self.containerVolumes,
