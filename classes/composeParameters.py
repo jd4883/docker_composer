@@ -1,6 +1,8 @@
+import re
+
+import classes.traefik
 from classes.environment import Environs
 from classes.oauth import OauthProxy
-from classes.traefik import Traefik
 from src.formatting import formatString
 from src.gets import getServiceHostname
 from src.parser import parseImage
@@ -52,6 +54,10 @@ def combineLocalSecrets(v):
 	return payload
 
 
+def parseLabels(v):
+	return { x for x in v["labels"] } if "labels" in v else dict()
+
+
 class ComposeFile(object):
 	def __init__(self,
 	             domain = "example.com",
@@ -65,7 +71,6 @@ class ComposeFile(object):
 	             authenticatedEmailsContainerPath = "/config/authenticated-emails.txt",
 	             organizrSubdomain = "home",
 	             secretsPath = "${SECRETS}",
-	             oauth_port = str(4180),
 	             puid = str(1001),
 	             pgid = str(1001),
 	             version = 3.7,
@@ -73,9 +78,11 @@ class ComposeFile(object):
 	             openVpnName = "openvpn",
 	             subnetStart = 225):
 		self.oauthService = None
+		# master list of all active ports in a given stack
+		self.defaults = defaults
+		self.activePorts = list()
 		self.networks = dict()
 		self.stackDict = stackDict
-		self.defaults = defaults
 		self.local_volumes = list()
 		self.conditionals = dict()
 		self.combinedConditionals = dict()
@@ -91,10 +98,9 @@ class ComposeFile(object):
 		self.secrets = setItems(self, "Secrets", self.stackDict, dict())
 		self.conditionals.update({ "oauth": bool() })
 		self.conditionals.update({ "proxy_secrets": bool() })
-		self.oauth_port = oauth_port
 		self.ports = list()
 		self.proxy_networks = dict()
-		self.authenticatedEmailsFile = str(authenticatedEmailsFile)
+		self.authenticatedEmailsFile = str(self.defaults["Authenticated Emails File"])
 		self.services = dict()
 		self.secrets.update({ 'puid': { "file": f"{self.secretsPath}/{'PUID'.upper()}.secret" } })
 		self.secrets.update({ 'pgid': { "file": f"{self.secretsPath}/{'PGID'.upper()}.secret" } })
@@ -147,39 +153,44 @@ class ComposeFile(object):
 			self.puid = str(int(setItems(self, "PUID", self.defaults, puid)))
 			self.pgid = str(int(setItems(self, "PGID", self.defaults, pgid)))
 			self.services[k].update({ "container_name": k })
-			self.services[k].update(parseImage(v))
 			self.services[k].update(self.parseLocalSecrets(v))
 			v["secrets"] = self.services[k]['secrets']
 			self.setPrivs(k)
-			self.labels = self.parseLabels(v)
+			self.labels = parseLabels(v)
 			if self.conditionals["Entrypoint"]:
 				self.services[k].update({ "entrypoint": v["Entrypoint"] })
-			
-			# make sure this works
-			[self.parseList(k, v, x) for x in ["cap_add", "cap_drop", "sysctls", "depends_on"]]
-			
+				[self.parseList(k, v, x) for x in ["cap_add", "cap_drop", "sysctls", "depends_on"]]
 			self.setNetworking(k, v)
-			self.traefik = Traefik(self,
-			                       self.ports,
-			                       self.globalValues,
-			                       k,
-			                       v)
+			self.traefik = classes.traefik.Traefik(self,
+			                                       self.ports,
+			                                       self.globalValues, k, v)
 			self.setCommands(k, v)
-			
-			if ((not self.traefik.subdomains) or (
-					self.conditionals["proxy_secrets"] or self.conditionals["oauth"])) and "vpn" not in v:
+			# expand this out into a much better more robust version of build
+			# likely this approach will work for almost every resource type as a cleaner way to do this
+			# TODO: add logic to put image here and not in its other location
+			# really fragile right now as context must also be defined
+			if (("build" in v and v["build"]) and ("args" in v["build"] and v["build"]["args"])):
+				self.services[k].update({ "build": { "args": v["build"]["args"] } })
+				self.services[k]["build"].update({ "context": v["build"]["context"]  })
+			self.services[k].update(parseImage(v))
+			if (not (not (not self.traefik.subdomains)
+			         and not (self.conditionals["proxy_secrets"] or self.conditionals["oauth"]))) \
+					and not re.match('(?i)plex.linker', k) \
+					and not re.match(f'(?i){self.vpnContainerName}', k):
 				try:
 					del self.networks["networks"]["frontend"]
 				except (KeyError, TypeError):
 					pass
 			## SETS DNS
-			if "vpn" not in v:
+			if "vpn" not in v or self.vpnContainerName  == k:
 				if self.conditionals["DNS"]:
 					self.dns = [v["DNS"]]
 				self.services[k].update({ "domainname": self.domain })
 				try:
 					self.services[k].update({ "dns_search": list(dict.fromkeys(self.traefik.subdomains)) })
 					self.services[k].update({ "dns": list(dict.fromkeys(self.dns)) })
+					if not self.services[k]["dns_search"]:
+						del self.services[k]["dns_search"]
 				except (KeyError, TypeError):
 					pass
 			if self.combinedConditionals["frontend_no_oauth"]:
@@ -191,26 +202,25 @@ class ComposeFile(object):
 					self.services[k].update({ "labels": self.labels })
 				except (KeyError, TypeError):
 					pass
-			if "network_mode" in self.services[k]:
+			self.services[k]["restart"] = "on-failure"
+			if "network_mode" in self.services[k] and "vpn" not in k:
 				if not "depends_on" in self.services[k]:
 					self.services[k].update({ "depends_on": list() })
 				self.services[k]["depends_on"].append(self.vpnContainerName)
-				for i in ["dns", "dns_search", "domainname"]:
-					try:
-						del self.services[k][i]
-					except (KeyError, TypeError):
-						pass
+				if "vpn" not in k:
+					for i in ["dns", "dns_search", "domainname"]:
+						try:
+							del self.services[k][i]
+						except (KeyError, TypeError):
+							pass
 			if k.lower() == "depends_on" and k in self.services[k]["depends_on"]:
 				self.services[k]["depends_on"].remove(k)
-			if k == self.vpnContainerName:
-				self.services[k]["networks"].update({"frontend": dict()})
 			try:
 				self.dictCleanup(k)
 			except (KeyError, TypeError):
 				pass
-	
-	def parseLabels(self, v):
-		return {x for x in v["labels"]} if "labels" in v else dict()
+			if "vpn" in k or k is self.vpnContainerName:
+				self.services[k].update({ "dns": ["8.8.8.8", "8.8.4.4"] })
 	
 	def dictCleanup(self, k):
 		self.removeEmptyDict(k, "labels")
@@ -309,9 +319,10 @@ class ComposeFile(object):
 		formatString(payload)
 		return payload
 	
-	def parsePort(self, service, port = 80):
+	def parsePort(self, service, compose, port = 80):
 		if service == "plex":
 			port = 32400
 		elif self.ports:
 			port = str(self.ports[0]).split(":")[1]
+		compose.activePorts = list(dict.fromkeys(compose.activePorts + [port]))
 		return int(port)

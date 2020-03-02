@@ -6,22 +6,6 @@ from pathlib import Path
 from src.helpers import load_template
 
 
-# def gen_docker_yaml(configs, stack, defaults, stack_name, composeFile):
-# 	old = f"{configs}/docker-compose.yaml.old"
-# 	current = f"{configs}/docker-compose.yaml"
-# 	print(f"Creating stack configuration: {current}")
-# 	if os.path.isfile(current) and not (os.stat(current).st_size == 0):
-# 		shutil.copyfile(current, old)
-# 	backup = open(old, "w+")
-# 	# f_new = open(new, "w+")
-# 	# f_current = open(current, "w+")
-# 	t = load_template('COMPOSE_YAML')
-# 	render = t.render(stack = stack, defaults = defaults, stack_name = stack_name, compose = composeFile)
-# 	backup.write(render)
-# 	# if f_new.write(render):
-# 	# 	f_current.write(render)
-#
-
 def gen_app_specific_env_file(configs, app, environment):
 	print(f"Creating stack configuration: {configs}/{app}.env")
 	f = open(Path(f"{configs}/{app}.env"), "w+")
@@ -48,13 +32,13 @@ def gen_master_stack_file(payload):
 	json.dump(payload, f, ensure_ascii = False, indent = 4)
 
 
-def gen_setup_shell_script(stack, app, defaults, globals, configs):
+def gen_setup_shell_script(stack, app, defaults, g, configs):
 	stack_group = str(stack).lower().replace(" ", "_")
 	p = f"{configs}/setup.sh"
 	t = load_template('SHELL_SCRIPT')
 	f = open(Path(p), "w+")
 	print(f"Creating stack configuration: {p}")
-	render = t.render(stack_group = stack_group, service = app, defaults = defaults, globals = globals)
+	render = t.render(stack_group = stack_group, service = app, defaults = defaults, globals = g)
 	f.write(render)
 
 

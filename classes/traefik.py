@@ -15,10 +15,9 @@ class Traefik(object):
 	             frontendNetwork = "frontend",
 	             backendNetwork = "backend",
 	             organizrSubdomain = "home",
-	             customResponseHeaders = dict(),
-	             oauthPort = 4183
+	             customResponseHeaders = dict()
 	             ):
-		self.oauthPort = rand(23700, 23900) # historic default is 4180, went ephemeral here
+		self.oauthPort = self.generateRandomUniquePort(compose)
 		self.passHostHeader = ("traefik.frontend.passHostHeader", True)
 		self.stsSeconds = ("traefik.frontend.headers.STSSeconds", 315360000)
 		self.stsPreload = ("traefik.frontend.headers.STSPreload", True)
@@ -55,7 +54,16 @@ class Traefik(object):
 		self.customFrameOptionsValue = self.parseCustomFrameOptionsValue()
 		self.backend = ("traefik.backend", self.backendLabel)
 		self.network = ("traefik.docker.network", "frontend")
-		self.set()
+		self.set(compose)
+	
+	def generateRandomUniquePort(self, compose):
+		while True:
+			payload = rand(23700, 23900)
+			if payload not in compose.activePorts:
+				payload = rand(23700, 23900)
+				compose.activePorts = list(dict.fromkeys(compose.activePorts + [int(payload)]))
+				break
+		return payload
 	
 	def setSubdomains(self):
 		subdomains = list()
@@ -68,9 +76,9 @@ class Traefik(object):
 		payload = self.serviceItems["subdomains"] + [self.service]
 		return payload
 	
-	def set(self):
+	def set(self, compose):
 		subdomains = str(",".join(list(dict.fromkeys(self.subdomains))))
-		port = self.compose.parsePort(self.service)
+		port = self.compose.parsePort(self.service, compose)
 		if self.compose.conditionals["oauth"] or self.compose.conditionals["proxy_secrets"]:
 			port = self.oauthPort
 		self.labels = dict([self.backend,
@@ -101,11 +109,12 @@ class Traefik(object):
 		payload = f"allow-from {str(','.join(list(dict.fromkeys(urls))))}"
 		return payload
 	
-	def parsePort(self, service, port = 80):
+	def parsePort(self, service, compose, port = 80):
 		if service == "plex":
 			port = 32400
 		elif self.ports:
 			port = str(self.ports[0]).split(":")[1]
+		compose.activePorts = list(dict.fromkeys(compose.activePorts + [port]))
 		return int(port)
 	
 	def parseCustomResponseHeader(self):
@@ -123,18 +132,7 @@ class Traefik(object):
 def setCustomResponseHeader(customResponseHeaders):
 	payload = {
 			"X-Robots-Tag": ["noindex", "nofollow", "nosnippet", "noarchive", "notranslate", "noimageindex", "none"]
-			# "Feature-Policy:camera": None,
-			# "fullscreen":None,
-			# "geolocation": None,
-			# "microphone": None,
-			# "payment": None,
-			# "speaker": None,
-			# "usb": None,
-			# "vibrate": None,
-			# "vr": None,
-	        #   #||server:''||X-Powered-By:''"
 			}
-	
 	
 	customResponseHeaders.update(payload)
 	return customResponseHeaders

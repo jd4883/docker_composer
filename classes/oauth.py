@@ -10,7 +10,6 @@ class OauthProxy(object):
 	             service,
 	             compose,
 	             external = False,
-	             emailDomain = 'gmail',
 	             cookieRefreshInerval = 1,
 	             cookieExpiration = 672,
 	             network = 'frontend'):
@@ -29,12 +28,13 @@ class OauthProxy(object):
 			self.env.gen_app_specific_env_file(path, self.service, self.environment)
 		self.dns = compose.dns
 		self.dns_search = compose.traefik.subdomains
-		self.image_name = "quay.io/pusher/oauth2_proxy"
+		self.image_name = "skippy/oauth2_proxy"
+		#self.image_name = "quay.io/pusher/oauth2_proxy"
 		self.image_tag = "latest"
 		self.image = ":".join([self.image_name, self.image_tag])
 		subdomains = str(",".join(list(dict.fromkeys(compose.traefik.subdomains))))
 		self.schema = "http" if (
-				str(compose.parsePort(service)) != str(443) or (self.service == "nextcloud")) else "https"
+				str(compose.parsePort(service, compose)) != str(443) or (self.service == "nextcloud")) else "https"
 		self.labels = dict([
 				("traefik.backend", self.container_name),
 				compose.traefik.enable,
@@ -53,6 +53,7 @@ class OauthProxy(object):
 				("traefik.frontend.rule", f"Host:{subdomains}"),
 				("traefik.port", compose.traefik.oauthPort),
 				("traefik.protocol", self.schema),
+				("traefik.backend.loadbalancer.stickiness.cookieName", "_oauth2_proxy")
 				])
 		self.networks = list(dict.fromkeys([
 				"frontend",
@@ -82,23 +83,26 @@ class OauthProxy(object):
 			compose.secrets.update({ secret: self.client_id })
 			compose.secrets.update({ secret: self.client_secret })
 			compose.secrets.update({ secret: self.cookie_secret })
-		self.authenticatedEmails = f"{compose.authenticatedEmailsFile}:{compose.authenticatedEmailsContainerPath}"
+		self.authenticatedEmails = f"{compose.authenticatedEmailsFile}:/authenticated-emails.txt"
 		self.upstream = self.parseUpstream(compose)
 		self.provider = "github"
+		open("/authenticated-emails.txt", "w+").write('\n'.join(compose.defaults['Authenticated Emails File']))
+		
 		self.commands = list(dict.fromkeys([
-				f"--authenticated-emails-file={compose.authenticatedEmailsContainerPath}",
+				f"--authenticated-emails-file=/authenticated-emails.txt",
 				f"--client-id={self.clientIdEnviron}",
-				f"--client-secret-file=/run/secrets/{self.secrets[1]}",
+				f"--cookie-secure=true",
+				#f"--email-domain=gmail.com",
+				#f"--client-secret-file=/run/secrets/{self.secrets[1]}",
 				#f"--cookie-domain={compose.domain}",
 				f"--cookie-expire={cookieExpiration}h",
 				f"--cookie-httponly=false",
 				f"--cookie-refresh={cookieRefreshInerval}h",
-				f"--email-domain={emailDomain}",
 				f"--http-address=http://0.0.0.0:{compose.traefik.oauthPort}",
 				f"--provider={self.provider}",
 				f"--redirect-url=https://{compose.traefik.parsePrimarySubdomain()}",
 				f"--request-logging=false",
-				f"--ssl-upstream-insecure-skip-verify=true",
+				#f"--ssl-insecure-skip-verify=true",
 				f"--upstream={self.upstream}",
 				]))
 		
@@ -107,34 +111,35 @@ class OauthProxy(object):
 				str(self.container_name): {
 						"image":                self.image,
 						"secrets":              self.secrets,
-						#"container_name":       self.container_name,
-						#"hostname":             self.container_name,
 						str(self.env.fileName): self.env.files,
+						"dns":                  self.dns,
+						"dns_search":           self.dns_search,
 						"networks":             self.networks,
 						"labels":               self.labels,
 						"volumes":              self.containerVolumes,
-						"command":              self.commands
+						"command":              self.commands,
+						"restart":              "on-failure",
 						}
 				} if not (compose.conditionals["vpn"] and compose.conditionals["ports"]) \
 			else {
 				str(self.container_name): {
 						"image":                self.image,
 						"secrets":              self.secrets,
-						#"container_name":       self.container_name,
 						str(self.env.fileName): self.env.files,
 						"network_mode":         f"service:{compose.vpnContainerName}",
 						"labels":               self.labels,
 						"volumes":              self.containerVolumes,
-						"command":              self.commands
+						"command":              self.commands,
+						"restart":              "on-failure",
 						}
 				}
 	
 	def parseUpstream(self, compose):
 		if compose.conditionals["vpn"] and compose.conditionals["ports"]:
 			payload = f"{self.schema}://{'-'.join([compose.stackTitle.lower(), 'pia-openvpn'])}:" \
-			          f"{compose.parsePort(self.service)}"
+			          f"{compose.parsePort(self.service, compose)}"
 		elif compose.conditionals["ports"]:
-			payload = f"{self.schema}://{self.service}:{compose.parsePort(self.service)}"
+			payload = f"{self.schema}://{self.service}:{compose.parsePort(self.service, compose)}"
 		else:
 			payload = f"{self.schema}://{self.service}:80"
 		return payload

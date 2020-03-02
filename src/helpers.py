@@ -16,10 +16,3 @@ def mkdir(service_configs):
 	except FileExistsError:
 		# directory already exists
 		pass
-
-#
-# def cleanup_name(name):
-# 	name = name.replace("_", "-")
-# 	name = name.replace(" ", "-")
-# 	name = name.lower()
-# 	return name
