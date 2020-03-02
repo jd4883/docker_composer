@@ -220,7 +220,7 @@ class ComposeFile(object):
 			except (KeyError, TypeError):
 				pass
 			if "vpn" in k or k is self.vpnContainerName:
-				self.services[k].update({ "dns": self.dns })
+				self.services[k].update({ "dns": ["8.8.8.8", "8.8.4.4"] })
 	
 	def dictCleanup(self, k):
 		self.removeEmptyDict(k, "labels")
