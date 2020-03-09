@@ -52,7 +52,7 @@ if __name__ == "__main__":
 		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
 		networks = dict()
-		gen_terraform_code(stack, app, defaults, g, configs)
+		gen_terraform_code(stack, defaults, g, configs)
 		for app in composeFile.services:
 			hosts = list()
 			master_stack[get_index(stack)] = get_stack_file(stack)
