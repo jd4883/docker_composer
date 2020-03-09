@@ -103,6 +103,12 @@ class Traefik(object):
 			self.labels["traefik.protocol"] = "https"
 			self.labels["traefik.frontend.redirect.regex"] = "https://(.*)/.well-known/(card|cal)dav"
 			self.labels["traefik.frontend.redirect.replacement"] = "https://$$1/remote.php/dav/"
+		if self.service == "traefik":
+			# need to adjust to do the following:
+			# htpasswd -Bbn ${USERNAME} ${PASSWORD} | sed -e 's/\$/\$\$/g'
+			# suspect a popen calling a bash script that feeds in username and passwords the way to go
+			# may need to add dependencies
+			self.labels["traefik.frontend.auth.basic.users"] = "${USERNAME}:${PASSWORD}"
 	
 	def parseCustomFrameOptionsValue(self):
 		urls = ["SAMEORIGIN", f"https://{self.organizrURL}"]

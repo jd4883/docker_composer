@@ -8,6 +8,16 @@ from src.helpers import *
 from src.parser import parse_hostfile
 from src.sets import set_services
 
+def gen_terraform_code(stack, app, defaults, g, configs):
+	stack_group = str(stack).lower().replace(" ", "_")
+	p = f"{configs}/providers.tf"
+	t = load_template("TF_PROVIDERS_TEMPLATE")
+	f = open(Path(p), "w+")
+	print(f"Creating terraform providers configuration: {p}")
+	render = t.render(defaults = defaults["kubernetes"]["providers"])
+	f.write(render)
+
+
 if __name__ == "__main__":
 	parameters = open(Path(str("/parameters.yaml")))
 	file = yaml.load(parameters, Loader = yaml.FullLoader)
@@ -41,6 +51,8 @@ if __name__ == "__main__":
 		gen_globals_env_file(configs, defaults)
 		networks = dict()
 		for app in composeFile.services:
+			if "kubernetes" in composeFile.services[app]:
+				gen_terraform_code(stack, app, defaults, g, configs)
 			hosts = list()
 			master_stack[get_index(stack)] = get_stack_file(stack)
 			parse_hostfile(composeFile.services[app], hostfile, hosts, defaults)

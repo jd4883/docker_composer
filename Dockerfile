@@ -15,6 +15,10 @@ ENV CONFIG /configs
 ENV SERVERS_TOML /configs/servers.toml
 ENV HOST_CONFIGS /var/data/configs
 ENV HOSTFILE_TEMPLATE /config/templates/hostfile.jinja.txt
+ENV TF_PROVIDERS_TEMPLATE /config/templates/providers.jinja.tf
+ENV TF_OUTPUT_TEMPLATE /config/templates/outputs.jinja.tf
+ENV TF_VARS_TEMPLATE /config/templates/variables.jinja.tf
+ENV TF_MAIN_TEMPLATE /config/templates/main.jinja.tf
 ENV HOSTFILE /config/hostfile.txt
 ENV SERVERS_TOML /config/servers.toml
 ENV SHELL_SCRIPT /config/templates/shell_script.jinja.sh

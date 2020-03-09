@@ -31,7 +31,6 @@ def gen_master_stack_file(payload):
 	f = open(f"{os.environ['STACKS_JSON']}", 'w+', encoding = 'utf-8')
 	json.dump(payload, f, ensure_ascii = False, indent = 4)
 
-
 def gen_setup_shell_script(stack, app, defaults, g, configs):
 	stack_group = str(stack).lower().replace(" ", "_")
 	p = f"{configs}/setup.sh"
