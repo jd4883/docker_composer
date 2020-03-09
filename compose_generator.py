@@ -10,6 +10,8 @@ from src.sets import set_services
 
 def gen_terraform_code(stack, app, defaults, g, configs):
 	stack_group = str(stack).lower().replace(" ", "_")
+	# add in conditionals about generating more than just providers
+	# limit what providers are added
 	p = f"{configs}/providers.tf"
 	t = load_template("TF_PROVIDERS_TEMPLATE")
 	f = open(Path(p), "w+")
@@ -50,9 +52,8 @@ if __name__ == "__main__":
 		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
 		networks = dict()
+		gen_terraform_code(stack, app, defaults, g, configs)
 		for app in composeFile.services:
-			if "kubernetes" in composeFile.services[app]:
-				gen_terraform_code(stack, app, defaults, g, configs)
 			hosts = list()
 			master_stack[get_index(stack)] = get_stack_file(stack)
 			parse_hostfile(composeFile.services[app], hostfile, hosts, defaults)
