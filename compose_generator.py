@@ -8,7 +8,7 @@ from src.helpers import *
 from src.parser import parse_hostfile
 from src.sets import set_services
 
-def gen_terraform_code(stack, app, defaults, g, configs):
+def gen_terraform_code(stack,  defaults, g, configs):
 	stack_group = str(stack).lower().replace(" ", "_")
 	# add in conditionals about generating more than just providers
 	# limit what providers are added
