@@ -1,5 +1,5 @@
 {{ "module " + svc + " {" }}
-{{ "source = "|indent(2, true) helm_module }}
+{{ "source = "|indent(2, true) + helm_module }}
 {{ "providers = {"|indent(2, true) }}
 {%- for provider in service.kubernetes.providers %}
 {{ provider|indent(4, true) + " = " + provider + "." + provider }}
