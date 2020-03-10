@@ -1,4 +1,4 @@
-{%- for provider in defaults["providers"] %}
+{%- for provider in defaults %}
 {{ "provider" + provider|lower + "{" }}
 {{ "alias"|indent(2) + alias | default(provider|lower) }}
 {%- for k, v in defaults["providers"][provider].items() %}
