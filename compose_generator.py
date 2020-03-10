@@ -68,7 +68,7 @@ if __name__ == "__main__":
 			gen_setup_shell_script(stack, app, defaults, g, configs)
 			composeFile.services[app]['HOSTS'] = ",".join(hosts)
 			try:
-				if "kubernetes" in file['Stack Group Name'][stack][app]:
+				if "kubernetes" in file['Stack Group Name'][stack][app] or app == "consul":
 					gen_terraform_service_code(app, file['Stack Group Name'][stack][app], defaults, configs)
 			except KeyError:
 				pass
