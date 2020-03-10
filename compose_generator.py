@@ -68,6 +68,6 @@ if __name__ == "__main__":
 			gen_setup_shell_script(stack, app, defaults, g, configs)
 			composeFile.services[app]['HOSTS'] = ",".join(hosts)
 			if app == "consul":
-				gen_terraform_service_code(app, stack[app], defaults, configs)
+				gen_terraform_service_code(app, file['Stack Group Name'][stack], defaults, configs)
 		gen_hostfile(file['Stack Group Name'][stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
