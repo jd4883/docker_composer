@@ -67,6 +67,7 @@ if __name__ == "__main__":
 			parse_hostfile(composeFile.services[app], hostfile, hosts, defaults)
 			gen_setup_shell_script(stack, app, defaults, g, configs)
 			composeFile.services[app]['HOSTS'] = ",".join(hosts)
+			import pprint
 			pprint.pprint(stack_dict[stack][app])
 			try:
 				print(f"kubernetes flag set for {app} make sure it still works")
