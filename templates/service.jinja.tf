@@ -5,10 +5,10 @@
 {{ provider|indent(4, true) + " = " + provider + "." + provider }}
 {%- endfor %}
   }
-  "helm_chart = "{{ service.kubernetes.helm_chart|string }}
-  "name = "{{ svc }}
-  "namespace = "{{ service.kubernetes.namespace }}
-{{ "spec = {"|indent(2, true) }}
+  helm_chart = {{ service.kubernetes.helm_chart|string }}
+  name = {{ svc }}
+  namespace = {{ service.kubernetes.namespace }}
+  spec = {
 {{ "max_replicas = "|indent(4, true) + service.kubernetes.spec.max_replicas||default(defaults.kubernetes.spec.max_replicas) }}
 {{ "min_replicas = "|indent(4, true) + service.kubernetes.spec.min_replicas|default(defaults.kubernetes.spec.min_replicas) }}
 {{ "cpu_usage = "|indent(4, true) + service.kubernetes.spec.cpu_usage|default(defaults.kubernetes.spec.cpu_usage) }}
