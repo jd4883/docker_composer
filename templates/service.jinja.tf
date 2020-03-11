@@ -1,8 +1,9 @@
-module "{{ svc }}" {
+module {{ svc }} {
   source = "{{ helm_module }}"
   providers = {
-  {%- for provider in service.kubernetes.providers %}
-    {{ provider }} = {{ provider }}.{{ provider }}{% endfor %}
+{%- for provider in service.kubernetes.providers %}
+    {{ provider }} = {{ provider }}.{{ provider }}
+{%- endfor %}
   }
   helm_chart = "{{ service.kubernetes.helm_chart }}"
   name = "{{ svc }}"
