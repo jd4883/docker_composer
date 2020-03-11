@@ -1,13 +1,12 @@
-{{ "module " + svc + " {" }}
-{{ "source = "|indent(2, true) + helm_module }}
-{{ "providers = {"|indent(2, true) }}
-{%- for provider in service.kubernetes.providers %}
-{{ provider|indent(4, true) + " = " + provider + "." + provider }}
-{%- endfor %}
+module "{{ svc }}" {
+  source = "{{ helm_module }}"
+  providers = {
+  {%- for provider in service.kubernetes.providers %}
+    {{ provider }} = {{ provider }}.{{ provider }}{% endfor %}
   }
-  helm_chart = {{ service.kubernetes.helm_chart|string }}
-  name = consul
-  namespace = {{ service.kubernetes.namespace }}
+  helm_chart = "{{ service.kubernetes.helm_chart }}"
+  name = "{{ svc }}"
+  namespace = "{{ service.kubernetes.namespace }}"
   spec = {
 {{ "max_replicas = "|indent(4, true) + service.kubernetes.spec.max_replicas||default(defaults.kubernetes.spec.max_replicas) }}
 {{ "min_replicas = "|indent(4, true) + service.kubernetes.spec.min_replicas|default(defaults.kubernetes.spec.min_replicas) }}
