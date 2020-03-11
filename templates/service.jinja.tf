@@ -7,7 +7,7 @@
   }
   helm_chart = {{ service.kubernetes.helm_chart|string }}
   name = {{ svc }}
-  namespace = {{ service.kubernetes.namespace }}
+  namespace = storage
   spec = {
 {{ "max_replicas = "|indent(4, true) + service.kubernetes.spec.max_replicas||default(defaults.kubernetes.spec.max_replicas) }}
 {{ "min_replicas = "|indent(4, true) + service.kubernetes.spec.min_replicas|default(defaults.kubernetes.spec.min_replicas) }}
