@@ -5,9 +5,9 @@ module {{ svc }} {
     {{ provider }} = {{ provider }}.{{ provider }}
 {%- endfor %}
   }
-  helm_chart = "{{ service.kubernetes.helm_chart }}"
-  name = "{{ svc }}"
-  namespace = "storage"
+  helm_chart = {{ service.kubernetes.helm_chart }}
+  name = {{ svc }}
+  namespace = {{ service.kubernetes.namespace }}
   spec = {
     max_replicas = {{ service.kubernetes.spec.max_replicas||default(defaults.kubernetes.spec.max_replicas) }}
     min_replicas = {{ service.kubernetes.spec.min_replicas|default(defaults.kubernetes.spec.min_replicas) }}
