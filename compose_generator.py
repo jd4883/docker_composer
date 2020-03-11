@@ -67,6 +67,6 @@ if __name__ == "__main__":
 			composeFile.services[app]['HOSTS'] = ",".join(hosts)
 			if app == "consul":
 				print(f"kubernetes flag set for {app} make sure it still works")
-				gen_terraform_service_code(app, stack_dict[stack], defaults, configs)
+				gen_terraform_service_code(app, stack_dict[stack][app], defaults, configs)
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
