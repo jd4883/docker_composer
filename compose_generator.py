@@ -8,6 +8,28 @@ from src.helpers import *
 from src.parser import parse_hostfile
 from src.sets import set_services
 
+def gen_terraform_code(stack,  defaults, g, configs):
+	stack_group = str(stack).lower().replace(" ", "_")
+	# add in conditionals about generating more than just providers
+	# limit what providers are added
+	p = f"{configs}/providers.tf"
+	t = load_template("TF_PROVIDERS_TEMPLATE")
+	f = open(Path(p), "w+")
+	print(f"Creating terraform providers configuration: {p}")
+	render = t.render(defaults = defaults["kubernetes"]["providers"])
+	f.write(render)
+
+def gen_terraform_service_code(app, app_dict, defaults, configs):
+	p = f"{configs}/{app}.tf"
+	t = load_template("TF_SERVICE_TEMPLATE")
+	f = open(Path(p), "w+")
+	print(f"Creating terraform service file for {app}: {p}")
+	render = t.render(svc = app,
+	                  defaults = defaults,
+	                  helm_module = str(os.environ["TF_MODULE_HELM"]),
+	                  service = app_dict)
+	f.write(render)
+
 if __name__ == "__main__":
 	parameters = open(Path(str("/parameters.yaml")))
 	file = yaml.load(parameters, Loader = yaml.FullLoader)
@@ -35,16 +57,17 @@ if __name__ == "__main__":
 		          indent = 4,
 		          width = 85,
 		          default_flow_style = False)
-		# gen_docker_yaml(configs, file['Stack Group Name'][stack], defaults, cleanup_name(stack), composeFile)
-		# this is probably redundant
 		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
 		networks = dict()
+		gen_terraform_code(stack, defaults, g, configs)
 		for app in composeFile.services:
 			hosts = list()
 			master_stack[get_index(stack)] = get_stack_file(stack)
 			parse_hostfile(composeFile.services[app], hostfile, hosts, defaults)
 			gen_setup_shell_script(stack, app, defaults, g, configs)
 			composeFile.services[app]['HOSTS'] = ",".join(hosts)
+			#if app == "consul":
+			#	gen_terraform_service_code(app, file['Stack Group Name'][stack], defaults, configs)
 		gen_hostfile(file['Stack Group Name'][stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
