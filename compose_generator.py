@@ -68,7 +68,10 @@ if __name__ == "__main__":
 			gen_setup_shell_script(stack, app, defaults, g, configs)
 			composeFile.services[app]['HOSTS'] = ",".join(hosts)
 			import pprint
-			pprint.pprint(stack_dict[stack][app])
+			print("STACK DICT")
+			pprint.pprint(stack_dict[stack])
+			print("COMPOSE FILE APP")
+			pprint.pprint(composeFile.services[app])
 			try:
 				print(f"kubernetes flag set for {app} make sure it still works")
 				gen_terraform_service_code(app, stack_dict[stack][app], defaults, configs)
