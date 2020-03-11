@@ -14,22 +14,21 @@ module "{{ svc }}" {
     api_version = "{{ service.kubernetes.spec.api_version|default(defaults.kubernetes.spec.api_verseion) }}"
     kind = "{{ service.kubernetes.spec.kind|default(defaults.kubernetes.spec.kind) }}"
   }
-  domain = "{{ defaults.domain|default("example.com") }}"
-{{ "subdomains = [" |indent(2, true) }}
+  domain = "{{ defaults.domain|default(example.com) }}"
+  subdomains = [
 {%- if service.subdomains is defined %}
-{{ "]"}
 {%- for i in service.subdomains %}
-{{ "\""|indent(4, true) + i + "\"" }}
+    - "{{ i }}"
 {%- endfor %}
 {%- else %}
-{{- "]" }}
+  ]
 {%- endif %}
-{{ "sets = ["|indent(2, true) }}
+  sets = [
 {%- for k,v in service.kubernetes.values.items() %}
-{{ "{"|indent(4, true) }}
-{{ "name = \""|indent(6, true) + k + "\"," }}
-{{ "value = \""|indent(6, true) + v + "\"" }}
-{{ "},"|indent(4, true) }}
+    {
+      name = "{{ k }}",
+      value = "{{ v }}"
+    }
 {%- endfor %}
-{{ "]"|indent(2, true) }}
-{{ "}" }}
+  ]
+}
