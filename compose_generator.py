@@ -9,9 +9,6 @@ from src.parser import parse_hostfile
 from src.sets import set_services
 
 def gen_terraform_code(stack,  defaults, g, configs):
-	stack_group = str(stack).lower().replace(" ", "_")
-	# add in conditionals about generating more than just providers
-	# limit what providers are added
 	p = f"{configs}/providers.tf"
 	t = load_template("TF_PROVIDERS_TEMPLATE")
 	f = open(Path(p), "w+")
