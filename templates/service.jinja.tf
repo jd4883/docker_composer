@@ -8,13 +8,13 @@ module "{{ svc }}" {
   name = "{{ svc }}"
   namespace = "{{ service.kubernetes.namespace }}"
   spec = {
-{{ "max_replicas = "|indent(4, true) + service.kubernetes.spec.max_replicas||default(defaults.kubernetes.spec.max_replicas) }}
-{{ "min_replicas = "|indent(4, true) + service.kubernetes.spec.min_replicas|default(defaults.kubernetes.spec.min_replicas) }}
-{{ "cpu_usage = "|indent(4, true) + service.kubernetes.spec.cpu_usage|default(defaults.kubernetes.spec.cpu_usage) }}
-{{ "api_version = "|indent(4, true) + service.kubernetes.spec.api_version|default(defaults.kubernetes.spec.api_verseion) }}
-{{ "kind = "|indent(4, true) + service.kubernetes.spec.kind|default(defaults.kubernetes.spec.kind) }}
-{{ "}"|indent(2, true) }}
-{{ "domain = \""|indent(2, true) + defaults.domain|default("example.com") + "\"" }}
+    max_replicas = {{ service.kubernetes.spec.max_replicas||default(defaults.kubernetes.spec.max_replicas) }}
+    min_replicas = {{ service.kubernetes.spec.min_replicas|default(defaults.kubernetes.spec.min_replicas) }}
+    cpu_usage = {{ service.kubernetes.spec.cpu_usage|default(defaults.kubernetes.spec.cpu_usage) }}
+    api_version = "{{ service.kubernetes.spec.api_version|default(defaults.kubernetes.spec.api_verseion) }}"
+    kind = "{{ service.kubernetes.spec.kind|default(defaults.kubernetes.spec.kind) }}"
+  }
+  domain = "{{ defaults.domain|default("example.com") }}"
 {{ "subdomains = [" |indent(2, true) }}
 {%- if service.subdomains is defined %}
 {{ "]"}
