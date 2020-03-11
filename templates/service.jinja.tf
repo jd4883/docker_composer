@@ -4,8 +4,8 @@
 {%- for provider in service.kubernetes.providers %}
 {{ provider|indent(4, true) + " = " + provider + "." + provider }}
 {%- endfor %}
-{{ "}"|indent(2, true) }}
-{{ "helm_chart = "|indent(2, true) + service.kubernetes.helm_chart|string }}
+  }
+  "helm_chart = "{{ service.kubernetes.helm_chart|string }}
   "name = "{{ svc }}
   "namespace = "{{ service.kubernetes.namespace }}
 {{ "spec = {"|indent(2, true) }}
