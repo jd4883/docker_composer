@@ -70,7 +70,7 @@ if __name__ == "__main__":
 					print(f"kubernetes flag set for {app} make sure it still works")
 					print(composeFile.services)
 					gen_terraform_service_code(app, stack_dict[stack][app], defaults, configs)
-			except KeyError:
-				pass
+			except KeyError as err:
+				print(err)
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
