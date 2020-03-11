@@ -6,9 +6,9 @@
 {%- endfor %}
 {{ "}"|indent(2, true) }}
 {{ "helm_chart = \""|indent(2, true) + service.kubernetes.helm_chart + "\"" }}
-{{ "name = "|indent(2, true) + svc }}
-{{ "namespace = \""|indent(2, true) + service.kubernetes.namespace + "\"" }}
-{{ "spec = {"|indent(2, true) }}
+{{ "name = " | indent(2, true) + svc }}
+{{ "namespace = \"" | indent(2, true) + service.kubernetes.namespace + "\"" }}
+{{ "spec = {" | indent(2, true) }}
 {{ "max_replicas = "|indent(4, true) + service.kubernetes.spec.max_replicas||default(defaults.kubernetes.spec.max_replicas) }}
 {{ "min_replicas = "|indent(4, true) + service.kubernetes.spec.min_replicas|default(defaults.kubernetes.spec.min_replicas) }}
 {{ "cpu_usage = "|indent(4, true) + service.kubernetes.spec.cpu_usage|default(defaults.kubernetes.spec.cpu_usage) }}
