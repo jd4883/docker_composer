@@ -65,9 +65,12 @@ if __name__ == "__main__":
 			parse_hostfile(composeFile.services[app], hostfile, hosts, defaults)
 			gen_setup_shell_script(stack, app, defaults, g, configs)
 			composeFile.services[app]['HOSTS'] = ",".join(hosts)
-			if app == "consul" and "kubernetes" in stack_dict[stack][app]:
-				print(f"kubernetes flag set for {app} make sure it still works")
-				print(composeFile.services)
-				gen_terraform_service_code(app, stack_dict[stack][app], defaults, configs)
+			try:
+				if app == "consul" and "kubernetes" in stack_dict[stack][app]:
+					print(f"kubernetes flag set for {app} make sure it still works")
+					print(composeFile.services)
+					gen_terraform_service_code(app, stack_dict[stack][app], defaults, configs)
+			except KeyError:
+				pass
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
