@@ -1,4 +1,4 @@
-module {{ svc + " {" }}
+module {{ "consul" + " {" }}
   source = {{ helm_module|string }}
   providers = {
 {%- for provider in service.kubernetes.providers %}
