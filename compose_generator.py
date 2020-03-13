@@ -72,7 +72,7 @@ if __name__ == "__main__":
 				print(f"DEFAULTS\t{defaults}")
 				pprint(f"DICT AP\t{stack_dict[stack]['Services'][app]}")
 				print(f"CONFIGS\t{configs}")
-				pprint(f"SERVICES\t{composeFile.services[app]}")
+				pprint(f"SERVICES\t{composeFile.services}")
 				print(f"kubernetes flag set for {app} make sure it still works")
 				gen_terraform_service_code(app, stack_dict[stack]["Services"][app], defaults, configs)
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
