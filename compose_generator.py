@@ -70,9 +70,9 @@ if __name__ == "__main__":
 			if app in stack_dict[stack]["Services"] and "kubernetes" in stack_dict[stack]["Services"][app]:
 				print(f"APP\t{app}")
 				print(f"DEFAULTS\t{defaults}")
-				print(f"DICT AP\t{stack_dict[stack]['Services'][app]}")
+				pprint(f"DICT AP\t{stack_dict[stack]['Services'][app]}")
 				print(f"CONFIGS\t{configs}")
-				print(f"SERVICES\t{composeFile.services}")
+				pprint(f"SERVICES\t{composeFile.services[app]}")
 				print(f"kubernetes flag set for {app} make sure it still works")
 				gen_terraform_service_code(app, stack_dict[stack]["Services"][app], defaults, configs)
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
