@@ -68,7 +68,7 @@ if __name__ == "__main__":
 			gen_setup_shell_script(stack, app, defaults, g, configs)
 			composeFile.services[app]['HOSTS'] = ",".join(hosts)
 			if app in stack_dict[stack]["Services"] and "kubernetes" in stack_dict[stack]["Services"][app]:
-				pprint(f"DICT AP\t{stack_dict[stack]['Services'][app]}")
+				print(f"DICT AP\t{stack_dict[stack]['Services'][app]}")
 				print(f"kubernetes flag set for {app} make sure it still works")
 				gen_terraform_service_code(app, stack_dict[stack]['Services'][app], defaults, configs)
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
