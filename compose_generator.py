@@ -68,10 +68,11 @@ if __name__ == "__main__":
 			gen_setup_shell_script(stack, app, defaults, g, configs)
 			composeFile.services[app]['HOSTS'] = ",".join(hosts)
 			if app in stack_dict[stack]["Services"] and "kubernetes" in stack_dict[stack]["Services"][app]:
-			#try:
+				print(f"APP\t{app}")
+				print(f"DEFAULTS\t{defaults}")
+				print(f"DICT AP\t{stack_dict[stack]['Services'][app]}")
+				print(f"CONFIGS\t{configs}")
 				print(f"kubernetes flag set for {app} make sure it still works")
 				gen_terraform_service_code(app, stack_dict[stack]["Services"][app], defaults, configs)
-			#except KeyError as err:
-			#	pass
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)

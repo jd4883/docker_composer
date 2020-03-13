@@ -6,7 +6,7 @@ module {{ svc + " {" }}
 {%- endfor %}
   }
   helm_chart = stable/consul
-  name = {{ svc }}
+  name = "consul"
   namespace = storage
   spec = {
     max_replicas = {{ service.kubernetes.spec.max_replicas||default(defaults.kubernetes.spec.max_replicas) }}
