@@ -5,9 +5,9 @@ module {{ svc + " {" }}
 {{ provider|indent(4, true) + " = " + provider + "." + provider }}
 {%- endfor %}
   }
-  helm_chart = {{ service.kubernetes.helm_chart }}
+  helm_chart = stable/consul
   name = {{ svc }}
-  namespace = {{ block service.kubernetes.namespace }}
+  namespace = {{ service.kubernetes.namespace }}
   spec = {
     max_replicas = {{ service.kubernetes.spec.max_replicas||default(defaults.kubernetes.spec.max_replicas) }}
     min_replicas = {{ service.kubernetes.spec.min_replicas|default(defaults.kubernetes.spec.min_replicas) }}
