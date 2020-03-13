@@ -24,6 +24,7 @@ def gen_terraform_service_code(app, app_dict, defaults, configs):
 	print(f"Creating terraform service file for {app}: {p}")
 	render = t.render(defaults = defaults,
 	                  helm_module = str(os.environ["TF_MODULE_HELM"]),
+	                  app = app,
 	                  service = app_dict)
 	f.write(render)
 
