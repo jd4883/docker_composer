@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.7
 from pprint import pprint
+
 import yaml
 
 from classes.composeParameters import ComposeFile
@@ -9,7 +10,8 @@ from src.helpers import *
 from src.parser import parse_hostfile
 from src.sets import set_services
 
-def gen_terraform_code(stack,  defaults, g, configs):
+
+def gen_terraform_code(stack, defaults, g, configs):
 	p = f"{configs}/providers.tf"
 	t = load_template("TF_PROVIDERS_TEMPLATE")
 	f = open(Path(p), "w+")
@@ -17,16 +19,18 @@ def gen_terraform_code(stack,  defaults, g, configs):
 	render = t.render(defaults = defaults["kubernetes"]["providers"])
 	f.write(render)
 
+
 def gen_terraform_service_code(app, app_dict, defaults, configs):
+	app_dict["kubernetes"]["name"] = app
 	p = f"{configs}/{app}.tf"
 	t = load_template("TF_SERVICE_TEMPLATE")
 	f = open(Path(p), "w+")
 	print(f"Creating terraform service file for {app}: {p}")
 	render = t.render(defaults = defaults,
 	                  helm_module = str(os.environ["TF_MODULE_HELM"]),
-	                  app = app,
 	                  service = app_dict)
 	f.write(render)
+
 
 if __name__ == "__main__":
 	parameters = open(Path(str("/parameters.yaml")))
