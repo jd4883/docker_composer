@@ -3,7 +3,7 @@ MAINTAINER 'Jacob Dresdale'
 LABEL name=docker_composer
 USER root
 
-VOLUME /config /configs
+VOLUME /config /configs /configs/terraform/kubernetes
 WORKDIR /config
 
 COPY requirements.txt /config/
