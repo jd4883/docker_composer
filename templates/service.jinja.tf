@@ -24,5 +24,12 @@ module {{ "consul" + " {" }}
 {%- else %}
   ]
 {%- endif %}
+  sets = [
+{%- for i in service.kubernetes.values %}
+    {
+      name = "{{ i[0] }}",
+      value = "{{ i[1] }}"
+    }
+{%- endfor %}
   ]
 }
