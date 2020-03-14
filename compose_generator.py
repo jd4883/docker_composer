@@ -48,6 +48,7 @@ if __name__ == "__main__":
 	gen_setup_servers_toml(defaults, file['External Servers'])
 	stack_dict = file['Stack Group Name']
 	for stack in stack_dict:
+		# add handling per service for if docker disabled
 		composeFile = ComposeFile(file['Defaults']['Domain'],
 		                          stack,
 		                          file["Defaults"]["Authenticated Emails File"],
