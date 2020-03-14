@@ -25,10 +25,10 @@ module {{ "consul" + " {" }}
   ]
 {%- endif %}
   sets = [
-{%- for x in service.kubernetes.values %}
+{%- for k,v in values.items() %}
     {
-      name = "{{ x }}",
-      value = "{{ x }}"
+      name = "{{ k }}",
+      value = "{{ v }}"
     }
 {%- endfor %}
   ]

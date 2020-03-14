@@ -28,7 +28,8 @@ def gen_terraform_service_code(app, app_dict, defaults, configs):
 	print(f"Creating terraform service file for {app}: {p}")
 	render = t.render(defaults = defaults,
 	                  helm_module = str(os.environ["TF_MODULE_HELM"]),
-	                  service = app_dict)
+	                  service = app_dict,
+	                  values = app_dict['kubernetes']['values'].items())
 	f.write(render)
 
 
@@ -73,6 +74,9 @@ if __name__ == "__main__":
 			if app in stack_dict[stack]["Services"] and "kubernetes" in stack_dict[stack]["Services"][app]:
 				pprint(f"DICT APP\t{stack_dict[stack]['Services'][app]['kubernetes']['values'].items()}")
 				pprint(f"kubernetes flag set for {app} make sure it still works")
-				gen_terraform_service_code(app, stack_dict[stack]['Services'][app], defaults, configs)
+				gen_terraform_service_code(app,
+				                           stack_dict[stack]['Services'][app],
+				                           defaults,
+				                           configs)
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
