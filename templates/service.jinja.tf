@@ -25,7 +25,7 @@ module {{ "consul" + " {" }}
   ]
 {%- endif %}
   sets = [
-{%- for k,v in values.items() %}
+{%- for k,v in values %}
     {
       name = "{{ k }}",
       value = "{{ v }}"
