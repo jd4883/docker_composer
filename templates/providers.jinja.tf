@@ -4,5 +4,5 @@ provider "{{ provider|lower }}" {
 {%- for k, v in defaults[provider].items()|sort %}
   {{ k }} = "{{ v }}"
 {%- endfor %}
-},
+}
 {% endfor %}
