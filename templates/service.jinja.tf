@@ -16,7 +16,11 @@ module {{ "consul" + " {" }}
     kind = "{{ service.kubernetes.spec.kind|default(defaults.kubernetes.spec.kind)|string }}"
   }
   domain = "{{ defaults.domain|default("example.com")|string }}"
-  subdomains = {%- if service.subdomains is defined %}{{ service.subdomains }}
+  subdomains = [
+{%- if service.subdomains is defined %}{{ service.subdomains }}
+    "{{ i }}",
+{%- endfor %}]
+{%- else %}
 {%- endif %}
   sets = [
 {%- for k,v in values %}
