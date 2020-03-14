@@ -17,7 +17,7 @@ module {{ "consul" + " {" }}
   }
   domain = "{{ defaults.domain|default("example.com")|string }}"
   subdomains = [
-{%- if service.subdomains is defined %}{{ service.subdomains }}
+{%- if service.subdomains is defined %}{% for i in service.subdomains %}
     "{{ i }}",
 {%- endfor %}]
 {%- else %}
