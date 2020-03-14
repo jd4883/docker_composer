@@ -15,11 +15,12 @@ module {{ "consul" + " {" }}
     api_version = "{{ service.kubernetes.spec.api_version|default(defaults.kubernetes.spec.api_version)|string }}"
     kind = "{{ service.kubernetes.spec.kind|default(defaults.kubernetes.spec.kind)|string }}"
   }
-  domain = "{{ defaults.domain|default("example.com")|string }}"
+  domain = "{{ defaults.Domain|default("example.com")|string }}"
   subdomains = [
 {%- if service.subdomains is defined %}{% for i in service.subdomains %}
     "{{ i }}",
-{%- endfor %}]
+{%- endfor %}
+]
 {%- else %}
 {%- endif %}
   sets = [
