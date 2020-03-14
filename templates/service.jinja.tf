@@ -25,7 +25,7 @@ module {{ "consul" + " {" }}
   ]
 {%- endif %}
   sets = [
-{%- for k,v in service.kubernetes.values|tojson %}
+{%- for k,v in service.kubernetes.values %}
     {
       name = "{{ k }}",
       value = "{{ v }}"
