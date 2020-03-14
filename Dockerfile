@@ -22,7 +22,7 @@ ENV SERVICE_ENV /config/templates/service.jinja.env
 ENV SHELL_SCRIPT /config/templates/shell_script.jinja.sh
 ENV STACKS_JSON /stacks.json
 ENV TF_MAIN_TEMPLATE /config/templates/main.jinja.tf
-ENV TF_MODULE_HELM /configs/terraform/kubernetes/modules/helm/
+ENV TF_MODULE_HELM ../terraform/kubernetes/modules/helm/
 ENV TF_OUTPUT_TEMPLATE /config/templates/outputs.jinja.tf
 ENV TF_PROVIDERS_TEMPLATE /config/templates/providers.jinja.tf
 ENV TF_SERVICE_TEMPLATE /config/templates/service.jinja.tf
