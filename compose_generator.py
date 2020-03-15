@@ -31,7 +31,7 @@ def gen_terraform_service_code(app, app_dict, defaults, configs):
 	render = t.render(defaults = defaults,
 	                  helm_module = str(os.environ["TF_MODULE_HELM"]),
 	                  service = app_dict,
-	                  configs = configs)
+	                  configs = "${CONFIGS}")
 	f.write(render)
 
 
