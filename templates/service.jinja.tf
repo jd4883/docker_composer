@@ -26,7 +26,7 @@ module {{ "consul" + " {" }}
   sets = [
 {%- for k,v in values|sort %}
     {
-      name = "{{ k }}",
+      name = "{{ k }}"
       value = "{{ v }}"
     },
 {%- endfor %}
