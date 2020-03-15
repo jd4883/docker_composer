@@ -20,7 +20,7 @@ def gen_terraform_code(defaults, configs):
 	f.write(render)
 
 
-def gen_terraform_service_code(app, app_dict, defaults, configs):
+def gen_terraform_service_code(app, app_dict, defaults, configs, stack):
 	app_dict["kubernetes"]["name"] = app
 	p = f"{configs}/{app}.tf"
 	y = f"{configs}/{app}.yaml"
@@ -31,7 +31,7 @@ def gen_terraform_service_code(app, app_dict, defaults, configs):
 	render = t.render(defaults = defaults,
 	                  helm_module = str(os.environ["TF_MODULE_HELM"]),
 	                  service = app_dict,
-	                  configs = "${CONFIGS}")
+	                  stack = "${CONFIGS}")
 	f.write(render)
 
 
@@ -78,6 +78,7 @@ if __name__ == "__main__":
 				gen_terraform_service_code(app,
 				                           stack_dict[stack]['Services'][app],
 				                           defaults,
-				                           configs)
+				                           configs,
+				                           stack)
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
