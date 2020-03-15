@@ -16,7 +16,7 @@ module {{ "consul" + " {" }}
     kind = "{{ service.kubernetes.spec.kind|default(defaults.kubernetes.spec.kind)|string }}"
   }
   domain = "{{ defaults.Domain|default("example.com")|string }}"
-  configs = "{{ configs|default('/var/data/configs')}}/{{ stack|string }}"
+  configs = "{{ configs|string|default('/var/data/configs/terraform')}}"
   subdomains = [
 {%- if service.subdomains is defined %}{% for i in service.subdomains %}
     "{{ i }}",
