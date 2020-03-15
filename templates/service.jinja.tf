@@ -21,8 +21,6 @@ module {{ "consul" + " {" }}
 {%- if service.subdomains is defined %}{% for i in service.subdomains %}
     "{{ i }}",
 {%- endfor %}
-]
-{%- else %}
 {%- endif %}
   ]
 }
