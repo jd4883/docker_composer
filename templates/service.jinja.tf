@@ -16,7 +16,7 @@ module {{ "consul" + " {" }}
     kind = "{{ service.kubernetes.spec.kind|default(defaults.kubernetes.spec.kind)|string }}"
   }
   domain = "{{ defaults.Domain|default("example.com")|string }}"
-  helm_value = {{ '["${file("${' + service.kubernetes.name  + '}.yaml")}"]' }}
+  helm_value = {{ '["${file("' + service.kubernetes.name  + '.yaml")}"]' }}
   subdomains = [{% if service.subdomains is defined %}{% for i in service.subdomains %}
     "{{ i }}",
 {%- endfor %}
