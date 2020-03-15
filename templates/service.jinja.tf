@@ -23,12 +23,5 @@ module {{ "consul" + " {" }}
 ]
 {%- else %}
 {%- endif %}
-  sets = [
-{%- for k,v in values|sort %}
-    {
-      name = "{{ k }}"
-      value = "{{ v }}"
-    },
-{%- endfor %}
   ]
 }

@@ -11,7 +11,7 @@ from src.parser import parse_hostfile
 from src.sets import set_services
 
 
-def gen_terraform_code(stack, defaults, g, configs):
+def gen_terraform_code(defaults, configs):
 	p = f"{configs}/providers.tf"
 	t = load_template("TF_PROVIDERS_TEMPLATE")
 	f = open(Path(p), "w+")
@@ -23,13 +23,14 @@ def gen_terraform_code(stack, defaults, g, configs):
 def gen_terraform_service_code(app, app_dict, defaults, configs):
 	app_dict["kubernetes"]["name"] = app
 	p = f"{configs}/{app}.tf"
+	y = f"{configs}/{app}.yaml"
 	t = load_template("TF_SERVICE_TEMPLATE")
 	f = open(Path(p), "w+")
 	print(f"Creating terraform service file for {app}: {p}")
+	yaml.dump(app_dict['kubernetes']['values'], open(y,"w+"))
 	render = t.render(defaults = defaults,
 	                  helm_module = str(os.environ["TF_MODULE_HELM"]),
-	                  service = app_dict,
-	                  values = app_dict['kubernetes']['values'].items())
+	                  service = app_dict)
 	f.write(render)
 
 
@@ -40,7 +41,7 @@ if __name__ == "__main__":
 	defaults = file['Defaults']
 	hostfile = list()
 	for server in file['External Servers']:
-		hostfile = [sub for sub in file['External Servers'][server]["subdomains"]]
+		hostfile = [sub for  sub in file['External Servers'][server]["subdomains"]]
 	master_stack = dict()
 	for server in file['External Servers']:
 		sublist = [f"{sub}.{defaults['Domain']}" for sub in file['External Servers'][server]['subdomains']]
@@ -65,7 +66,7 @@ if __name__ == "__main__":
 		services = set_services(file, stack)
 		gen_globals_env_file(configs, defaults)
 		networks = dict()
-		gen_terraform_code(stack, defaults, g, configs)
+		gen_terraform_code(defaults, configs)
 		for app in composeFile.services:
 			hosts = list()
 			master_stack[get_index(stack)] = get_stack_file(stack)
