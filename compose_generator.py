@@ -30,7 +30,8 @@ def gen_terraform_service_code(app, app_dict, defaults, configs):
 	yaml.dump(app_dict['kubernetes']['values'], open(y,"w+"))
 	render = t.render(defaults = defaults,
 	                  helm_module = str(os.environ["TF_MODULE_HELM"]),
-	                  service = app_dict)
+	                  service = app_dict,
+	                  configs = configs)
 	f.write(render)
 
 
