@@ -22,7 +22,6 @@ module {{ "consul" + " {" }}
    host_port = {{ host_port }}
    container_port = {{ container_port }}
   }
-
   subdomains = [{% if service.subdomains is defined %}{% for i in service.subdomains %}
     "{{ i }}",
 {%- endfor %}

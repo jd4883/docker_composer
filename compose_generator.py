@@ -33,7 +33,7 @@ def gen_terraform_service_code(app, app_dict, defaults, configs, stack):
 	                  service = app_dict,
 	                  stack = configs,
 	                  host_port = str(app_dict['ports'][0]).split(":")[0],
-	                  service_port = str(app_dict['ports'][0]).split(":")[1],
+	                  container_port = str(app_dict['ports'][0]).split(":")[1],
 	                  port_name = f"{app}-webui")
 	f.write(render)
 
