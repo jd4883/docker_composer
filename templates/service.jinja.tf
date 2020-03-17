@@ -17,6 +17,12 @@ module {{ "consul" + " {" }}
   }
   domain = "{{ defaults.Domain|default("example.com")|string }}"
   helm_value = {{ '["${file("' + service.kubernetes.name  + '.yaml")}"]' }}
+  ports = {
+   name = {{ port_name }}
+   host_port = {{ host_port }}
+   container_port = {{ container_port }}
+  }
+
   subdomains = [{% if service.subdomains is defined %}{% for i in service.subdomains %}
     "{{ i }}",
 {%- endfor %}
