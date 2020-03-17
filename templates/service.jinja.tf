@@ -17,7 +17,7 @@ module {{ "consul" + " {" }}
   }
   domain = "{{ defaults.Domain|default("example.com")|string }}"
   helm_value = {{ '["${file("' + service.kubernetes.name  + '.yaml")}"]' }}
-  ports = {
+  port = {
    name = {{ port_name }}
    host_port = {{ host_port }}
    container_port = {{ container_port }}
