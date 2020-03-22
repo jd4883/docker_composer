@@ -7,7 +7,7 @@ module {{ service.kubernetes.name + " {" }}
   }
   helm_chart = "{{ service.kubernetes.helm_chart }}"
   name = "{{ service.kubernetes.name }}"
-  namespace = "{{ service.kubernetes.namespace }}"
+  namespace = "{{ service.kubernetes.namespace|default(namespace|lower|replace(" ", "-")) }}"
   spec = {
     max_replicas = {{ service.kubernetes.spec.max_replicas|default(defaults.kubernetes.spec.max_replicas) }}
     min_replicas = {{ service.kubernetes.spec.min_replicas|default(defaults.kubernetes.spec.min_replicas) }}
@@ -16,7 +16,7 @@ module {{ service.kubernetes.name + " {" }}
     kind = "{{ service.kubernetes.spec.kind|default(defaults.kubernetes.spec.kind)|string }}"
   }
   domain = "{{ defaults.Domain|default("example.com")|string }}"
-  helm_value = {{ '["${file("' + service.kubernetes.name  + '.yaml")}"]' }}
+  helm_value = {{ '[file("' + service.kubernetes.name  + '.yaml")]' }}
   port = {
    name = "{{ port_name }}"
    host = {{ host_port }}

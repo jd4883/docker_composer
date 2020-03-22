@@ -19,7 +19,7 @@ def gen_terraform_code(payload, conf):
 	f.write(render)
 
 
-def gen_terraform_service_code(service, app_dict, base, conf):
+def gen_terraform_service_code(service, app_dict, base, conf, stack):
 	app_dict["kubernetes"]["name"] = service
 	p = f"{conf}/{service}.tf"
 	y = f"{conf}/{service}.yaml"
@@ -33,7 +33,8 @@ def gen_terraform_service_code(service, app_dict, base, conf):
 	                  stack = conf,
 	                  host_port = str(app_dict['ports'][0]).split(":")[0],
 	                  container_port = str(app_dict['ports'][0]).split(":")[1],
-	                  port_name = f"{service}-webui")
+	                  port_name = f"{service}-webui",
+	                  namespace = stack)
 	f.write(render)
 
 
@@ -83,6 +84,7 @@ if __name__ == "__main__":
 				gen_terraform_service_code(app,
 				                           stack_dict[stack]['Services'][app],
 				                           defaults,
-				                           configs)
+				                           configs,
+				                           stack)
 		gen_hostfile(stack_dict[stack], defaults, hostfile)
 	gen_master_stack_file(master_stack)
