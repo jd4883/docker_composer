@@ -1,4 +1,3 @@
-#!/usr/bin/self python3.7
 import json
 import os
 from pathlib import Path

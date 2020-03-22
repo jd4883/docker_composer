@@ -169,9 +169,9 @@ class ComposeFile(object):
 			# likely this approach will work for almost every resource type as a cleaner way to do this
 			# TODO: add logic to put image here and not in its other location
 			# really fragile right now as context must also be defined
-			if (("build" in v and v["build"]) and ("args" in v["build"] and v["build"]["args"])):
+			if ("build" in v and v["build"]) and ("args" in v["build"] and v["build"]["args"]):
 				self.services[k].update({ "build": { "args": v["build"]["args"] } })
-				self.services[k]["build"].update({ "context": v["build"]["context"]  })
+				self.services[k]["build"].append({ "context": v["build"]["context"] })
 			self.services[k].update(parseImage(v))
 			if (not (not (not self.traefik.subdomains)
 			         and not (self.conditionals["proxy_secrets"] or self.conditionals["oauth"]))) \
@@ -182,7 +182,7 @@ class ComposeFile(object):
 				except (KeyError, TypeError):
 					pass
 			## SETS DNS
-			if "vpn" not in v or self.vpnContainerName  == k:
+			if "vpn" not in v or self.vpnContainerName == k:
 				if self.conditionals["DNS"]:
 					self.dns = [v["DNS"]]
 				self.services[k].update({ "domainname": self.domain })

@@ -5,6 +5,16 @@ from src.formatting import formatString
 from src.sets import setItems
 
 
+def generateRandomUniquePort(compose):
+	while True:
+		payload = rand(23700, 23900)
+		if payload not in compose.activePorts:
+			payload = rand(23700, 23900)
+			compose.activePorts = list(dict.fromkeys(compose.activePorts + [int(payload)]))
+			break
+	return payload
+
+
 class Traefik(object):
 	def __init__(self,
 	             compose,
@@ -17,7 +27,7 @@ class Traefik(object):
 	             organizrSubdomain = "home",
 	             customResponseHeaders = dict()
 	             ):
-		self.oauthPort = self.generateRandomUniquePort(compose)
+		self.oauthPort = generateRandomUniquePort(compose)
 		self.passHostHeader = ("traefik.frontend.passHostHeader", True)
 		self.stsSeconds = ("traefik.frontend.headers.STSSeconds", 315360000)
 		self.stsPreload = ("traefik.frontend.headers.STSPreload", True)
@@ -55,15 +65,6 @@ class Traefik(object):
 		self.backend = ("traefik.backend", self.backendLabel)
 		self.network = ("traefik.docker.network", "frontend")
 		self.set(compose)
-	
-	def generateRandomUniquePort(self, compose):
-		while True:
-			payload = rand(23700, 23900)
-			if payload not in compose.activePorts:
-				payload = rand(23700, 23900)
-				compose.activePorts = list(dict.fromkeys(compose.activePorts + [int(payload)]))
-				break
-		return payload
 	
 	def setSubdomains(self):
 		subdomains = list()
