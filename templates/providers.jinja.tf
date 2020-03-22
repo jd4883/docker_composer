@@ -2,7 +2,7 @@
 provider "{{ provider|lower }}" {
   alias = "{{ alias | default(provider|lower) }}"
 {%- for k, v in defaults[provider].items()|sort %}
-{%- if v|lower == "true") %}
+{%- if v|lower == "true" %}
   {{ k }} = true
 {%- elif v|lower == "false" %}
   {{ k }} = false
